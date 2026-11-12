@@ -1,0 +1,100 @@
+.viewport {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  text-align: center;
+}
+
+.viewport__interior {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 320px;
+  height: 240px;
+  min-width: 320px;
+  min-height: 240px;
+  max-width: 320px;
+  max-height: 240px;
+  flex: 0 0 auto;
+}
+
+.viewport__copy {
+  margin: 0;
+  color: #eeeeee;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+}
+
+.viewport__busy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.viewport__spinner {
+  box-sizing: border-box;
+  display: block;
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgb(255 255 255 / 35%);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: viewport-spin 0.8s linear infinite;
+}
+
+.viewport__image,
+.viewport__still {
+  display: block;
+  width: 320px;
+  height: 240px;
+  min-width: 320px;
+  min-height: 240px;
+  max-width: 320px;
+  max-height: 240px;
+  flex: 0 0 auto;
+  object-fit: cover;
+  object-position: center;
+}
+
+.board-status {
+  width: calc(var(--screen-width) + (var(--bezel-frame) * 2));
+  max-width: calc(var(--screen-width) + (var(--bezel-frame) * 2));
+  margin-top: var(--space-2);
+}
+
+.board-status:not(:has(.helper, .board-error)) {
+  margin-top: 0;
+}
+
+.board-status .helper {
+  text-align: center;
+}
+
+.board-error {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #fff1f2;
+  color: #9f1239;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+}
+
+@keyframes viewport-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .viewport__spinner {
+    animation: none;
+  }
+}

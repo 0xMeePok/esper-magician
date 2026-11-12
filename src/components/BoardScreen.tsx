@@ -1,9 +1,11 @@
-import type { CSSProperties, ReactNode } from 'react'
+import { useId, type CSSProperties } from 'react'
 import type { Screen } from '../screens.ts'
+import Viewport from './Viewport.tsx'
+import { viewportAnnouncement, type ViewportState } from './viewportState.ts'
 
 type BoardScreenProps = {
   screen: Screen
-  children: ReactNode
+  state?: ViewportState
 }
 
 type ScreenStyle = CSSProperties & {
@@ -18,18 +20,30 @@ function screenStyle(screen: Screen): ScreenStyle {
   }
 }
 
-export default function BoardScreen({ screen, children }: BoardScreenProps) {
+export default function BoardScreen({
+  screen,
+  state = { status: 'empty' },
+}: BoardScreenProps) {
+  const statusId = useId()
+  const announcement = viewportAnnouncement(state)
+
   return (
     <figure className="board-screen" style={screenStyle(screen)}>
       <div className="bezel-slot">
         <div className="bezel">
-          <div className="bezel-opening">{children}</div>
+          <div className="bezel-opening">
+            <Viewport state={state} statusId={statusId} />
+          </div>
         </div>
       </div>
       <figcaption className="board-caption">{screen.bezelCaption}</figcaption>
-      <p className="helper screen-helper" aria-live="polite">
-        Pick an example or upload a picture.
-      </p>
+      <div id={statusId} className="board-status" aria-live="polite" aria-atomic="true">
+        {announcement.kind === 'helper' ? <p className="helper">{announcement.text}</p> : null}
+        {announcement.kind === 'error' ? <p className="board-error">{announcement.text}</p> : null}
+        {announcement.kind === 'progress' ? (
+          <p className="visually-hidden">{announcement.text}</p>
+        ) : null}
+      </div>
     </figure>
   )
 }
