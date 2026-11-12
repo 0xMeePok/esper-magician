@@ -50,6 +50,10 @@ html {
   html {
     overflow-x: auto;
   }
+
+  .screen-picker {
+    min-width: calc(320px + (var(--bezel-frame) * 2));
+  }
 }
 
 body {
