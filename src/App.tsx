@@ -5,7 +5,6 @@ import Footer from './components/Footer.tsx'
 import Header from './components/Header.tsx'
 import ScreenPicker from './components/ScreenPicker.tsx'
 import TryYourOwnSection from './components/TryYourOwnSection.tsx'
-import Viewport from './components/Viewport.tsx'
 import { readStoredScreenId, screenFor, storeScreenId, type ScreenId } from './screens.ts'
 
 export default function App() {
@@ -23,9 +22,7 @@ export default function App() {
       <main className="page-main">
         <div className="preview-column">
           <ScreenPicker selectedId={screenId} onSelect={selectScreen} />
-          <BoardScreen screen={screen}>
-            <Viewport />
-          </BoardScreen>
+          <BoardScreen screen={screen} state={{ status: 'empty' }} />
         </div>
         <div className="controls">
           <ExamplesSection />
