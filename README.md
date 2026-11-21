@@ -4,6 +4,8 @@ A free, open-source site for the ESP32-2432S028R.
 
 V1 is a 320×240 simulator. It does not flash the device.
 
+`firmware/` holds an ESP-IDF app for the board that shows a picture or GIF on its screen. See [firmware/README.md](firmware/README.md) for how to build and flash it.
+
 ## Install
 
 ```bash
