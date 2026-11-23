@@ -129,10 +129,21 @@ describe('photo frame example', () => {
     expect(loading).toContain('aria-checked="true"')
 
     const shown = renderPair('photo-frame', published[1]!.state)
+    const landscape = screenFor('2.8')
+    const portrait = screenFor('1.9')
+    const tall = renderToStaticMarkup(
+      <BoardScreen screen={portrait} state={published[1]!.state} />,
+    )
     expect(shown).toContain(`src="${PHOTO_FRAME}"`)
     expect(shown).toContain('alt=""')
-    expect(shown).toContain('width="320"')
-    expect(shown).toContain('height="240"')
+    expect(shown).toContain(`width="${landscape.width}"`)
+    expect(shown).toContain(`height="${landscape.height}"`)
+    expect(tall).toContain(`width="${portrait.width}"`)
+    expect(tall).toContain(`height="${portrait.height}"`)
+    expect(tall).toContain(`width:${portrait.width}px`)
+    expect(tall).toContain(`height:${portrait.height}px`)
+    expect(tall).toContain(`src="${PHOTO_FRAME}"`)
+    expect(tall).toContain('alt=""')
     expect(shown).toContain('object-fit:cover')
     expect(shown).toContain(`aria-label="${VIEWPORT_LABEL}"`)
     expect(shown).toContain(ON_THE_SCREEN)
