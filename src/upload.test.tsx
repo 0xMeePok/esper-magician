@@ -158,8 +158,15 @@ describe('upload preview', () => {
     expect(result.states.map((state) => state.status)).toEqual(['opening', 'content'])
     expect(result.state).toEqual({ status: 'content', src: result.url, animated: true })
 
+    const screen = screenFor('2.8')
     const playing = renderToStaticMarkup(
-      <Viewport state={result.state!} statusId="screen-status" reducedMotion={false} />,
+      <Viewport
+        state={result.state!}
+        statusId="screen-status"
+        width={screen.width}
+        height={screen.height}
+        reducedMotion={false}
+      />,
     )
     expect(playing).toContain('<img')
     expect(playing).toContain('alt=""')
@@ -168,7 +175,13 @@ describe('upload preview', () => {
     expect(playing).not.toContain('<canvas')
 
     const still = renderToStaticMarkup(
-      <Viewport state={result.state!} statusId="screen-status" reducedMotion />,
+      <Viewport
+        state={result.state!}
+        statusId="screen-status"
+        width={screen.width}
+        height={screen.height}
+        reducedMotion
+      />,
     )
     expect(still).toContain('<canvas')
     expect(still).toContain('width="320"')
