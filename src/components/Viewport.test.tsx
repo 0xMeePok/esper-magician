@@ -125,6 +125,83 @@ describe('viewport state API', () => {
   })
 })
 
+describe('selected screen viewport', () => {
+  function renderScreenSize(id: '1.9' | '2.8', state?: ViewportState) {
+    return renderToStaticMarkup(<BoardScreen screen={screenFor(id)} state={state} />)
+  }
+
+  it('uses 170×320 for the 1.9-inch screen', () => {
+    const html = renderScreenSize('1.9')
+    expect(html).toContain('--screen-width:170px')
+    expect(html).toContain('--screen-height:320px')
+    expect(html).toContain('width:170px')
+    expect(html).toContain('height:320px')
+    expect(html).toContain('min-width:170px')
+    expect(html).toContain('max-width:170px')
+    expect(html).toContain('min-height:320px')
+    expect(html).toContain('max-height:320px')
+    expect(html).not.toContain('width:320px')
+    expect(html).not.toContain('height:240px')
+    expect(html).toContain('Your screen (170 × 320)')
+    expect(html).toContain(`aria-label="${VIEWPORT_LABEL}"`)
+    expect(html).toContain(EMPTY_MESSAGE)
+    expect(html).toContain(`class="helper">${EMPTY_HELPER}</p>`)
+  })
+
+  it('keeps 320×240 for the 2.8-inch screen', () => {
+    const html = renderScreenSize('2.8')
+    expect(html).toContain('--screen-width:320px')
+    expect(html).toContain('--screen-height:240px')
+    expect(html).toContain('width:320px')
+    expect(html).toContain('height:240px')
+    expect(html).not.toContain('width:170px')
+    expect(html).not.toContain('height:320px')
+    expect(html).toContain(SCREEN_CAPTION)
+    expect(html).toContain(`aria-label="${VIEWPORT_LABEL}"`)
+  })
+
+  it('switches viewport size and keeps the state that is showing', () => {
+    const loading = { status: 'loading' } as const
+    const landscape = renderScreenSize('2.8', loading)
+    const portrait = renderScreenSize('1.9', loading)
+
+    expect(landscape).toContain('width:320px')
+    expect(landscape).toContain('height:240px')
+    expect(portrait).toContain('width:170px')
+    expect(portrait).toContain('height:320px')
+    expect(portrait).not.toContain('width:320px')
+
+    for (const html of [landscape, portrait]) {
+      expect(html).toContain(LOADING_MESSAGE)
+      expect(html).toContain('aria-live="polite"')
+      expect(html).toContain(`class="visually-hidden">${LOADING_MESSAGE}</p>`)
+      expect(html).not.toContain(EMPTY_MESSAGE)
+    }
+
+    const uploadError = {
+      status: 'error' as const,
+      message: ERROR_UNSUPPORTED_TYPE,
+      interior: 'empty' as const,
+    }
+    const exampleError = {
+      status: 'error' as const,
+      message: ERROR_EXAMPLE_FAILED,
+      interior: 'plain' as const,
+    }
+    const upload = renderScreenSize('1.9', uploadError)
+    const failed = renderScreenSize('1.9', exampleError)
+
+    expect(upload).toContain('width:170px')
+    expect(upload).toContain(EMPTY_MESSAGE)
+    expect(upload).toContain(`class="board-error">${ERROR_UNSUPPORTED_TYPE}</p>`)
+    expect(upload).not.toContain(EMPTY_HELPER)
+    expect(failed).toContain('width:170px')
+    expect(failed).not.toContain(EMPTY_MESSAGE)
+    expect(failed).toContain(`class="board-error">${ERROR_EXAMPLE_FAILED}</p>`)
+    expect(failed).toContain('data-interior="plain"')
+  })
+})
+
 describe('board screen', () => {
   it('defaults the page to the empty state', () => {
     const html = renderToStaticMarkup(<App />)
@@ -237,6 +314,8 @@ describe('board screen', () => {
       <Viewport
         state={{ status: 'content', src: '/examples/loop.gif' }}
         statusId="screen-status"
+        width={VIEWPORT_WIDTH}
+        height={VIEWPORT_HEIGHT}
         reducedMotion
       />,
     )
@@ -245,10 +324,26 @@ describe('board screen', () => {
     expect(gif).toContain('height="240"')
     expect(gif).not.toContain('<img')
 
+    const portrait = renderToStaticMarkup(
+      <Viewport
+        state={{ status: 'content', src: '/examples/loop.gif' }}
+        statusId="screen-status"
+        width={170}
+        height={320}
+        reducedMotion
+      />,
+    )
+    expect(portrait).toContain('width="170"')
+    expect(portrait).toContain('height="320"')
+    expect(portrait).toContain('width:170px')
+    expect(portrait).toContain('height:320px')
+
     const still = renderToStaticMarkup(
       <Viewport
         state={{ status: 'content', src: '/examples/photo.png' }}
         statusId="screen-status"
+        width={VIEWPORT_WIDTH}
+        height={VIEWPORT_HEIGHT}
         reducedMotion
       />,
     )
@@ -260,6 +355,8 @@ describe('board screen', () => {
       <Viewport
         state={{ status: 'content', src: 'blob:http://localhost/clip', animated: true }}
         statusId="screen-status"
+        width={VIEWPORT_WIDTH}
+        height={VIEWPORT_HEIGHT}
         reducedMotion={false}
       />,
     )
@@ -285,10 +382,14 @@ describe('viewport spec sheet', () => {
     expect(pageCss).toContain('.bezel-slot')
     expect(pageCss).toContain('--bezel-slot-height:')
     expect(pageCss).toContain('min-width: calc(320px + (var(--bezel-frame) * 2))')
-    expect(sheet).toContain('calc(var(--screen-width) + (var(--bezel-frame) * 2))')
+    expect(sheet).toContain('max-width: calc(320px + (var(--bezel-frame) * 2))')
+    expect(sheet).not.toContain('calc(var(--screen-width) + (var(--bezel-frame) * 2))')
+    expect(sheet).toContain('width: 100%')
     expect(sheet).not.toContain('overflow-x')
-    expect(sheet).toContain('width: 320px')
-    expect(sheet).toContain('height: 240px')
+    expect(sheet).toContain('height: 100%')
+    expect(sheet).toContain('min-width: 0')
+    expect(sheet).not.toContain('width: 320px')
+    expect(sheet).not.toContain('height: 240px')
     expect(sheet).toContain('object-fit: cover')
     expect(sheet).toContain('object-position: center')
     expect(css).toContain('font-size: 14px')

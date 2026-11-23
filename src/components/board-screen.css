@@ -10,16 +10,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 320px;
-  height: 240px;
-  min-width: 320px;
-  min-height: 240px;
-  max-width: 320px;
-  max-height: 240px;
-  flex: 0 0 auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
 }
 
 .viewport__copy {
+  width: 100%;
+  min-width: 0;
   margin: 0;
   color: #eeeeee;
   font-size: 14px;
@@ -33,6 +32,8 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
+  width: 100%;
+  min-width: 0;
 }
 
 .viewport__spinner {
@@ -49,20 +50,16 @@
 .viewport__image,
 .viewport__still {
   display: block;
-  width: 320px;
-  height: 240px;
-  min-width: 320px;
-  min-height: 240px;
-  max-width: 320px;
-  max-height: 240px;
-  flex: 0 0 auto;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
   object-position: center;
 }
 
 .board-status {
-  width: calc(var(--screen-width) + (var(--bezel-frame) * 2));
-  max-width: calc(var(--screen-width) + (var(--bezel-frame) * 2));
+  /* 352px is the 2.8-inch bezel. Follow the column when it is narrower. */
+  width: 100%;
+  max-width: calc(320px + (var(--bezel-frame) * 2));
   margin-top: var(--space-2);
 }
 
