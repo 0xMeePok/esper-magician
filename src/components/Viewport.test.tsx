@@ -86,6 +86,13 @@ describe('viewport state API', () => {
     expect(viewportAnnouncement({ status: 'content', src: '/photo.jpg' })).toEqual({
       kind: 'none',
     })
+    expect(viewportAnnouncement({ status: 'empty' }, true)).toEqual({
+      kind: 'helper',
+      text: 'Pick an example, upload a picture, or choose a saved upload.',
+    })
+    expect(viewportAnnouncement({ status: 'content', src: '/photo.jpg' }, true)).toEqual({
+      kind: 'none',
+    })
   })
 
   it('covers the 320×240 box without letterboxing, including smaller assets', () => {
@@ -227,6 +234,13 @@ describe('board screen', () => {
     expect(html).toContain('aria-hidden="true"')
     expect(html).toContain(EMPTY_MESSAGE)
     expect(html).toContain(`class="helper">${EMPTY_HELPER}</p>`)
+    expect(html).toContain('class="crop-slot"')
+    expect(html).not.toContain('>Crop<')
+    const withUploads = renderToStaticMarkup(
+      <BoardScreen screen={screenFor('2.8')} libraryHasItems />,
+    )
+    expect(withUploads).toContain('Pick an example, upload a picture, or choose a saved upload.')
+    expect(withUploads).not.toContain(`class="helper">${EMPTY_HELPER}</p>`)
     expect(html).toContain('width:320px')
     expect(html).toContain('height:240px')
     expect(html).toContain('class="bezel-slot"')
@@ -314,16 +328,17 @@ describe('board screen', () => {
       expect(html).toContain(`height:${screen.height}px`)
       expect(html).toContain(`width="${screen.width}"`)
       expect(html).toContain(`height="${screen.height}"`)
-      expect(html).toContain('object-fit:cover')
+      expect(html).toContain('object-fit:contain')
+      expect(html).toContain('data-framing="contain"')
       expect(html).not.toContain('padding')
     }
   })
 
-  it('covers the opening with content and leaves the status slot empty', () => {
+  it('contains content in the opening (ASH-22) and leaves the status slot empty', () => {
     const html = renderScreen({ status: 'content', src: '/examples/photo-frame.jpg' })
     expect(html).toContain('src="/examples/photo-frame.jpg"')
     expect(html).toContain('alt=""')
-    expect(html).toContain('object-fit:cover')
+    expect(html).toContain('object-fit:contain')
     expect(html).toContain('object-position:center')
     expect(html).not.toContain(EMPTY_MESSAGE)
     expect(html).not.toContain(EMPTY_HELPER)
@@ -413,7 +428,8 @@ describe('viewport spec sheet', () => {
     expect(sheet).toContain('min-width: 0')
     expect(sheet).not.toContain('width: 320px')
     expect(sheet).not.toContain('height: 240px')
-    expect(sheet).toContain('object-fit: cover')
+    expect(sheet).toContain('object-fit: contain')
+    expect(sheet).not.toMatch(/\.viewport__image,\s*\.viewport__still\s*\{[^}]*object-fit:\s*cover/)
     expect(sheet).toContain('object-position: center')
     expect(css).toContain('font-size: 14px')
     expect(css).toContain('line-height: 20px')

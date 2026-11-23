@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="96" viewBox="0 0 128 96">
+  <rect width="128" height="96" fill="#EFF6FF"/>
+  <g transform="translate(14 18)" fill="none" stroke="#0F766E" stroke-width="2.4" stroke-linecap="round">
+    <circle cx="9" cy="9" r="4.2" fill="#0F766E" stroke="none"/>
+    <path d="M9 0.8v2.6M9 14.6v2.6M0.8 9h2.6M14.6 9h2.6M3.2 3.2l1.8 1.8M13 13l1.8 1.8M3.2 14.8l1.8-1.8M13 5l1.8-1.8"/>
+  </g>
+  <text x="14" y="58" fill="#111111" font-family="system-ui, sans-serif" font-size="17" font-weight="600">Today</text>
+  <text x="14" y="76" fill="#4A4A4A" font-family="system-ui, sans-serif" font-size="12">Sunny and warm</text>
+</svg>

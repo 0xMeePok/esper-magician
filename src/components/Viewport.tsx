@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import './board-screen.css'
+import { cropImageLayout, drawLayout } from '../crop.ts'
+import DigitalClock from './DigitalClock.tsx'
+import InfoCard from './InfoCard.tsx'
 import {
   EMPTY_MESSAGE,
   LOADING_MESSAGE,
   OPENING_MESSAGE,
   VIEWPORT_LABEL,
+  containDrawRect,
   contentShowsStillFrame,
   viewportColors,
-  coverDrawRect,
+  type AppliedCrop,
   type ViewportState,
 } from './viewportState.ts'
 
@@ -51,6 +55,9 @@ export default function Viewport({ state, statusId, width, height, reducedMotion
       aria-describedby={statusId}
       data-state={state.status}
       data-interior={state.status === 'error' ? state.interior : undefined}
+      data-framing={
+        state.status === 'content' ? (state.crop ? 'cropped' : 'contain') : undefined
+      }
       style={{
         width,
         height,
@@ -93,8 +100,17 @@ function ViewportInterior({
         width={width}
         height={height}
         animated={state.animated}
+        crop={state.crop}
         reducedMotion={reducedMotion}
       />
+    )
+  }
+
+  if (state.status === 'layout') {
+    return state.layout === 'clock' ? (
+      <DigitalClock width={width} height={height} />
+    ) : (
+      <InfoCard width={width} height={height} />
     )
   }
 
@@ -120,17 +136,39 @@ function ViewportContent({
   width,
   height,
   animated,
+  crop,
   reducedMotion,
 }: {
   src: string
   width: number
   height: number
   animated?: boolean
+  crop?: AppliedCrop
   reducedMotion?: boolean
 }) {
   const prefersReducedMotion = usePrefersReducedMotion(reducedMotion)
   if (contentShowsStillFrame(src, animated, prefersReducedMotion)) {
-    return <StillFrame src={src} width={width} height={height} />
+    return <StillFrame src={src} width={width} height={height} crop={crop} />
+  }
+
+  if (crop) {
+    const layout = cropImageLayout(crop.source, crop, { width, height })
+    return (
+      <div className="viewport__crop" style={{ width, height }}>
+        <img
+          className="viewport__cropped"
+          src={src}
+          alt=""
+          style={{
+            left: layout.left,
+            top: layout.top,
+            width: layout.width,
+            height: layout.height,
+            transform: layout.rotation ? `rotate(${layout.rotation}deg)` : undefined,
+          }}
+        />
+      </div>
+    )
   }
 
   return (
@@ -145,14 +183,24 @@ function ViewportContent({
         height,
         maxWidth: width,
         maxHeight: height,
-        objectFit: 'cover',
+        objectFit: 'contain',
         objectPosition: 'center',
       }}
     />
   )
 }
 
-function StillFrame({ src, width, height }: { src: string; width: number; height: number }) {
+function StillFrame({
+  src,
+  width,
+  height,
+  crop,
+}: {
+  src: string
+  width: number
+  height: number
+  crop?: AppliedCrop
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -165,8 +213,12 @@ function StillFrame({ src, width, height }: { src: string; width: number; height
       if (cancelled) return
       const context = canvas.getContext('2d')
       if (!context) return
-      const rect = coverDrawRect(image.naturalWidth, image.naturalHeight, width, height)
       context.clearRect(0, 0, width, height)
+      if (crop) {
+        drawLayout(context, image, cropImageLayout(crop.source, crop, { width, height }))
+        return
+      }
+      const rect = containDrawRect(image.naturalWidth, image.naturalHeight, width, height)
       context.drawImage(
         image,
         rect.sx,
@@ -184,7 +236,7 @@ function StillFrame({ src, width, height }: { src: string; width: number; height
     return () => {
       cancelled = true
     }
-  }, [src, width, height])
+  }, [src, width, height, crop])
 
   return (
     <canvas

@@ -1,4 +1,4 @@
-import { useId, type CSSProperties } from 'react'
+import { useId, type CSSProperties, type ReactNode } from 'react'
 import type { Screen } from '../screens.ts'
 import Viewport from './Viewport.tsx'
 import { viewportAnnouncement, type ViewportState } from './viewportState.ts'
@@ -6,6 +6,9 @@ import { viewportAnnouncement, type ViewportState } from './viewportState.ts'
 type BoardScreenProps = {
   screen: Screen
   state?: ViewportState
+  libraryHasItems?: boolean
+  /** Rendered under the caption, outside the screen's pixels (the Crop control). */
+  cropControl?: ReactNode
 }
 
 type ScreenStyle = CSSProperties & {
@@ -23,9 +26,11 @@ function screenStyle(screen: Screen): ScreenStyle {
 export default function BoardScreen({
   screen,
   state = { status: 'empty' },
+  libraryHasItems = false,
+  cropControl,
 }: BoardScreenProps) {
   const statusId = useId()
-  const announcement = viewportAnnouncement(state)
+  const announcement = viewportAnnouncement(state, libraryHasItems)
 
   return (
     <figure className="board-screen" style={screenStyle(screen)}>
@@ -37,6 +42,7 @@ export default function BoardScreen({
         </div>
       </div>
       <figcaption className="board-caption">{screen.bezelCaption}</figcaption>
+      <div className="crop-slot">{cropControl}</div>
       <div id={statusId} className="board-status" aria-live="polite" aria-atomic="true">
         {announcement.kind === 'helper' ? <p className="helper">{announcement.text}</p> : null}
         {announcement.kind === 'error' ? <p className="board-error">{announcement.text}</p> : null}
