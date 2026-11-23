@@ -86,6 +86,13 @@ describe('viewport state API', () => {
     expect(viewportAnnouncement({ status: 'content', src: '/photo.jpg' })).toEqual({
       kind: 'none',
     })
+    expect(viewportAnnouncement({ status: 'empty' }, true)).toEqual({
+      kind: 'helper',
+      text: 'Pick an example, upload a picture, or choose a saved upload.',
+    })
+    expect(viewportAnnouncement({ status: 'content', src: '/photo.jpg' }, true)).toEqual({
+      kind: 'none',
+    })
   })
 
   it('covers the 320×240 box without letterboxing, including smaller assets', () => {
@@ -227,6 +234,13 @@ describe('board screen', () => {
     expect(html).toContain('aria-hidden="true"')
     expect(html).toContain(EMPTY_MESSAGE)
     expect(html).toContain(`class="helper">${EMPTY_HELPER}</p>`)
+    expect(html).toContain('class="crop-slot"')
+    expect(html).not.toContain('>Crop<')
+    const withUploads = renderToStaticMarkup(
+      <BoardScreen screen={screenFor('2.8')} libraryHasItems />,
+    )
+    expect(withUploads).toContain('Pick an example, upload a picture, or choose a saved upload.')
+    expect(withUploads).not.toContain(`class="helper">${EMPTY_HELPER}</p>`)
     expect(html).toContain('width:320px')
     expect(html).toContain('height:240px')
     expect(html).toContain('class="bezel-slot"')

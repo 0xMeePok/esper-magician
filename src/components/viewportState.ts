@@ -8,6 +8,8 @@ export const VIEWPORT_LABEL = 'Screen preview'
 export const SCREEN_CAPTION = 'Your screen (320 \u00d7 240)'
 export const EMPTY_MESSAGE = 'Nothing on the screen yet.'
 export const EMPTY_HELPER = 'Pick an example or upload a picture.'
+export const EMPTY_HELPER_WITH_UPLOADS =
+  'Pick an example, upload a picture, or choose a saved upload.'
 export const LOADING_MESSAGE = 'Loading\u2026'
 export const OPENING_MESSAGE = 'Opening your file\u2026'
 
@@ -45,10 +47,16 @@ export type ViewportAnnouncement =
   | { kind: 'error'; text: string }
   | { kind: 'none' }
 
-export function viewportAnnouncement(state: ViewportState): ViewportAnnouncement {
+export function viewportAnnouncement(
+  state: ViewportState,
+  libraryHasItems = false,
+): ViewportAnnouncement {
   switch (state.status) {
     case 'empty':
-      return { kind: 'helper', text: EMPTY_HELPER }
+      return {
+        kind: 'helper',
+        text: libraryHasItems ? EMPTY_HELPER_WITH_UPLOADS : EMPTY_HELPER,
+      }
     case 'loading':
       return { kind: 'progress', text: LOADING_MESSAGE }
     case 'opening':

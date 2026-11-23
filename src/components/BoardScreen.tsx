@@ -6,6 +6,7 @@ import { viewportAnnouncement, type ViewportState } from './viewportState.ts'
 type BoardScreenProps = {
   screen: Screen
   state?: ViewportState
+  libraryHasItems?: boolean
 }
 
 type ScreenStyle = CSSProperties & {
@@ -23,9 +24,10 @@ function screenStyle(screen: Screen): ScreenStyle {
 export default function BoardScreen({
   screen,
   state = { status: 'empty' },
+  libraryHasItems = false,
 }: BoardScreenProps) {
   const statusId = useId()
-  const announcement = viewportAnnouncement(state)
+  const announcement = viewportAnnouncement(state, libraryHasItems)
 
   return (
     <figure className="board-screen" style={screenStyle(screen)}>
@@ -37,6 +39,7 @@ export default function BoardScreen({
         </div>
       </div>
       <figcaption className="board-caption">{screen.bezelCaption}</figcaption>
+      <div className="crop-slot" />
       <div id={statusId} className="board-status" aria-live="polite" aria-atomic="true">
         {announcement.kind === 'helper' ? <p className="helper">{announcement.text}</p> : null}
         {announcement.kind === 'error' ? <p className="board-error">{announcement.text}</p> : null}

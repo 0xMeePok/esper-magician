@@ -32,6 +32,7 @@ export type UploadListAction =
   | { type: 'added'; record: UploadRecord; select: boolean }
   | { type: 'quota' }
   | { type: 'selected'; id: string }
+  | { type: 'cleared' }
   | { type: 'deleted'; id: string }
 
 function announce(state: UploadListState, text: string) {
@@ -84,6 +85,8 @@ export function uploadListReducer(state: UploadListState, action: UploadListActi
       }
     case 'selected':
       return { ...state, selectedId: action.id, saveError: null }
+    case 'cleared':
+      return { ...state, selectedId: null }
     case 'deleted':
       return {
         ...state,
@@ -96,6 +99,14 @@ export function uploadListReducer(state: UploadListState, action: UploadListActi
       return unreachable
     }
   }
+}
+
+export type UploadTile = {
+  id: string
+  name: string
+  type: string
+  src: string
+  animated: boolean
 }
 
 export function tileLabel(name: string, type: string, selected: boolean): string {
