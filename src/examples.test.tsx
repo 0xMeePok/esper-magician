@@ -91,7 +91,7 @@ describe('photo frame example', () => {
     vi.restoreAllMocks()
   })
 
-  it('ships one still, with room for the later examples', () => {
+  it('ships the Photo frame still as the first of four examples', () => {
     const file = new Uint8Array(readFileSync(assetUrl))
     expect(file.byteLength).toBe(12546)
     expect(createHash('sha256').update(file).digest('hex')).toBe(
@@ -99,16 +99,14 @@ describe('photo frame example', () => {
     )
     expect(jpegSize(file)).toEqual({ width: 320, height: 240 })
 
-    expect(examples).toEqual([
-      {
-        id: 'photo-frame',
-        title: 'Photo frame',
-        description: 'A still picture that fills the screen.',
-        thumbnail: PHOTO_FRAME,
-        kind: 'still',
-        src: PHOTO_FRAME,
-      },
-    ])
+    expect(examples[0]).toEqual({
+      id: 'photo-frame',
+      title: 'Photo frame',
+      description: 'A still picture that fills the screen.',
+      thumbnail: PHOTO_FRAME,
+      kind: 'still',
+      src: PHOTO_FRAME,
+    })
   })
 
   it('selects Photo frame, shows Loading…, then paints the still', async () => {
@@ -144,7 +142,7 @@ describe('photo frame example', () => {
     expect(tall).toContain(`height:${portrait.height}px`)
     expect(tall).toContain(`src="${PHOTO_FRAME}"`)
     expect(tall).toContain('alt=""')
-    expect(shown).toContain('object-fit:cover')
+    expect(shown).toContain('object-fit:contain')
     expect(shown).toContain(`aria-label="${VIEWPORT_LABEL}"`)
     expect(shown).toContain(ON_THE_SCREEN)
     expect(shown).not.toContain(EMPTY_MESSAGE)

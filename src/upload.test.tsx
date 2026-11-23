@@ -73,7 +73,7 @@ describe('upload preview', () => {
     const html = render(result.state!)
     expect(html).toContain(`src="${result.url}"`)
     expect(html).toContain('alt=""')
-    expect(html).toContain('object-fit:cover')
+    expect(html).toContain('object-fit:contain')
     expect(html).toContain('object-position:center')
     expect(html).toContain(`aria-label="${VIEWPORT_LABEL}"`)
     expect(html).not.toContain(EMPTY_MESSAGE)
@@ -170,7 +170,7 @@ describe('upload preview', () => {
     )
     expect(playing).toContain('<img')
     expect(playing).toContain('alt=""')
-    expect(playing).toContain('object-fit:cover')
+    expect(playing).toContain('object-fit:contain')
     expect(playing).toContain('object-position:center')
     expect(playing).not.toContain('<canvas')
 

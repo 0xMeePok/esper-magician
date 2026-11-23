@@ -9,7 +9,7 @@ const STILL_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp']
 const GIF_TYPE = 'image/gif'
 const GIF_EXTENSION = '.gif'
 
-function fileMime(file: File): string {
+function fileMime(file: { type: string }): string {
   return file.type.toLowerCase().split(';')[0]?.trim() ?? ''
 }
 
@@ -18,7 +18,11 @@ function hasExtension(name: string, extensions: readonly string[]): boolean {
   return extensions.some((extension) => lower.endsWith(extension))
 }
 
-function uploadKind(file: File): 'still' | 'animated' | 'unsupported' {
+export function mediaKind(file: {
+  name: string
+  type: string
+  size: number
+}): 'still' | 'animated' | 'unsupported' {
   if (file.size === 0) return 'unsupported'
   const mime = fileMime(file)
   if (mime === GIF_TYPE || hasExtension(file.name, [GIF_EXTENSION])) return 'animated'
@@ -26,11 +30,21 @@ function uploadKind(file: File): 'still' | 'animated' | 'unsupported' {
   return 'unsupported'
 }
 
-function decodeImage(src: string): Promise<boolean> {
+export function isAnimatedMedia(name: string, type: string): boolean {
+  return mediaKind({ name, type, size: 1 }) === 'animated'
+}
+
+/** What a decoded upload looks like, for framing and cropping. */
+export type OpenedMedia = { url: string; width: number; height: number; animated: boolean }
+
+/** Resolves with the decoded pixel size, or null when the browser can't read the file. */
+export function decodeImage(src: string): Promise<{ width: number; height: number } | null> {
   return new Promise((resolve) => {
     const image = new Image()
-    image.onload = () => resolve(true)
-    image.onerror = () => resolve(false)
+    image.onload = () => {
+      resolve({ width: image.naturalWidth || 0, height: image.naturalHeight || 0 })
+    }
+    image.onerror = () => resolve(null)
     image.src = src
   })
 }
@@ -45,11 +59,12 @@ export async function openPreview(
   file: File,
   previousUrl: string | null,
   publish: (state: ViewportState) => void,
+  onOpened?: (media: OpenedMedia) => void,
 ): Promise<string | null> {
   if (previousUrl) URL.revokeObjectURL(previousUrl)
   publish({ status: 'opening' })
 
-  const kind = uploadKind(file)
+  const kind = mediaKind(file)
   if (kind === 'unsupported') {
     await letOpeningPaint()
     publish({ status: 'error', message: ERROR_UNSUPPORTED_TYPE, interior: 'empty' })
@@ -57,11 +72,11 @@ export async function openPreview(
   }
 
   const url = URL.createObjectURL(file)
-  let decoded = false
+  let decoded: { width: number; height: number } | null = null
   try {
     decoded = await decodeImage(url)
   } catch {
-    decoded = false
+    decoded = null
   }
   if (!decoded) {
     URL.revokeObjectURL(url)
@@ -69,6 +84,7 @@ export async function openPreview(
     return null
   }
 
+  onOpened?.({ url, width: decoded.width, height: decoded.height, animated: kind === 'animated' })
   publish(
     kind === 'animated'
       ? { status: 'content', src: url, animated: true }

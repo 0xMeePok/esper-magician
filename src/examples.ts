@@ -5,12 +5,23 @@ type ExampleDetails = {
   thumbnail: string
 }
 
-export type Example = ExampleDetails & {
-  kind: 'still'
+/** A bitmap shown with the contain framing rule. */
+export type BitmapExample = ExampleDetails & {
+  kind: 'still' | 'animation'
   src: string
 }
 
+/** Laid out to the selected screen's exact pixels. */
+export type LayoutExample = ExampleDetails & {
+  kind: 'clock' | 'card'
+}
+
+export type Example = BitmapExample | LayoutExample
+
 export const ON_THE_SCREEN = 'On the screen'
+
+export const INFO_CARD_TITLE = 'Today'
+export const INFO_CARD_LINE = 'Sunny and warm'
 
 export const examples: Example[] = [
   {
@@ -20,6 +31,28 @@ export const examples: Example[] = [
     thumbnail: '/examples/photo-frame.jpg',
     kind: 'still',
     src: '/examples/photo-frame.jpg',
+  },
+  {
+    id: 'animation-loop',
+    title: 'Animation loop',
+    description: 'A short animation that plays over and over.',
+    thumbnail: '/examples/animation-loop-thumb.png',
+    kind: 'animation',
+    src: '/examples/animation-loop.gif',
+  },
+  {
+    id: 'digital-clock',
+    title: 'Digital clock',
+    description: 'A large, easy-to-read clock for the screen.',
+    thumbnail: '/examples/digital-clock-thumb.svg',
+    kind: 'clock',
+  },
+  {
+    id: 'info-card',
+    title: 'Info card',
+    description: 'A simple card with a title, a short line, and an icon.',
+    thumbnail: '/examples/info-card-thumb.svg',
+    kind: 'card',
   },
 ]
 

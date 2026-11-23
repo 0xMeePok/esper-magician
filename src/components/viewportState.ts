@@ -1,3 +1,5 @@
+import type { ScreenCrop, Size } from '../crop.ts'
+
 export const VIEWPORT_WIDTH = 320
 export const VIEWPORT_HEIGHT = 240
 export const BEZEL_FRAME = 16
@@ -8,6 +10,8 @@ export const VIEWPORT_LABEL = 'Screen preview'
 export const SCREEN_CAPTION = 'Your screen (320 \u00d7 240)'
 export const EMPTY_MESSAGE = 'Nothing on the screen yet.'
 export const EMPTY_HELPER = 'Pick an example or upload a picture.'
+export const EMPTY_HELPER_WITH_UPLOADS =
+  'Pick an example, upload a picture, or choose a saved upload.'
 export const LOADING_MESSAGE = 'Loading\u2026'
 export const OPENING_MESSAGE = 'Opening your file\u2026'
 
@@ -37,7 +41,14 @@ export type ViewportState =
   | { status: 'loading' }
   | { status: 'opening' }
   | { status: 'error'; message: string; interior: ViewportErrorInterior }
-  | { status: 'content'; src: string; animated?: boolean }
+  | { status: 'content'; src: string; animated?: boolean; crop?: AppliedCrop }
+  | { status: 'layout'; layout: ViewportLayout }
+
+/** Native examples laid out to the screen's exact pixels instead of drawn from a bitmap. */
+export type ViewportLayout = 'clock' | 'card'
+
+/** A saved crop plus the source size it was made against, ready to draw. */
+export type AppliedCrop = ScreenCrop & { source: Size }
 
 export type ViewportAnnouncement =
   | { kind: 'helper'; text: string }
@@ -45,10 +56,16 @@ export type ViewportAnnouncement =
   | { kind: 'error'; text: string }
   | { kind: 'none' }
 
-export function viewportAnnouncement(state: ViewportState): ViewportAnnouncement {
+export function viewportAnnouncement(
+  state: ViewportState,
+  libraryHasItems = false,
+): ViewportAnnouncement {
   switch (state.status) {
     case 'empty':
-      return { kind: 'helper', text: EMPTY_HELPER }
+      return {
+        kind: 'helper',
+        text: libraryHasItems ? EMPTY_HELPER_WITH_UPLOADS : EMPTY_HELPER,
+      }
     case 'loading':
       return { kind: 'progress', text: LOADING_MESSAGE }
     case 'opening':
@@ -56,6 +73,7 @@ export function viewportAnnouncement(state: ViewportState): ViewportAnnouncement
     case 'error':
       return { kind: 'error', text: state.message }
     case 'content':
+    case 'layout':
       return { kind: 'none' }
     default: {
       const unreachable: never = state
@@ -119,4 +137,23 @@ export function coverDrawRect(
   const sw = sourceWidth
   const sh = sourceWidth / boxAspect
   return { sx: 0, sy: (sourceHeight - sh) / 2, sw, sh, ...dest }
+}
+
+export type ContainRect = CoverRect
+
+/** Fits the whole source inside the box, centered, leaving #2A2A2A bars where it does not reach. */
+export function containDrawRect(
+  sourceWidth: number,
+  sourceHeight: number,
+  boxWidth = VIEWPORT_WIDTH,
+  boxHeight = VIEWPORT_HEIGHT,
+): ContainRect {
+  const source = { sx: 0, sy: 0, sw: Math.max(sourceWidth, 0), sh: Math.max(sourceHeight, 0) }
+  if (sourceWidth <= 0 || sourceHeight <= 0 || boxWidth <= 0 || boxHeight <= 0) {
+    return { ...source, dx: 0, dy: 0, dw: boxWidth, dh: boxHeight }
+  }
+  const scale = Math.min(boxWidth / sourceWidth, boxHeight / sourceHeight)
+  const dw = sourceWidth * scale
+  const dh = sourceHeight * scale
+  return { ...source, dx: (boxWidth - dw) / 2, dy: (boxHeight - dh) / 2, dw, dh }
 }
