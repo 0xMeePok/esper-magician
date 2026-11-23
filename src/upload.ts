@@ -6,6 +6,8 @@ import {
 
 const STILL_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const STILL_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp']
+const GIF_TYPE = 'image/gif'
+const GIF_EXTENSION = '.gif'
 
 function fileMime(file: File): string {
   return file.type.toLowerCase().split(';')[0]?.trim() ?? ''
@@ -16,9 +18,11 @@ function hasExtension(name: string, extensions: readonly string[]): boolean {
   return extensions.some((extension) => lower.endsWith(extension))
 }
 
-function uploadKind(file: File): 'still' | 'unsupported' {
+function uploadKind(file: File): 'still' | 'animated' | 'unsupported' {
   if (file.size === 0) return 'unsupported'
-  if (STILL_TYPES.has(fileMime(file)) || hasExtension(file.name, STILL_EXTENSIONS)) return 'still'
+  const mime = fileMime(file)
+  if (mime === GIF_TYPE || hasExtension(file.name, [GIF_EXTENSION])) return 'animated'
+  if (STILL_TYPES.has(mime) || hasExtension(file.name, STILL_EXTENSIONS)) return 'still'
   return 'unsupported'
 }
 
@@ -45,7 +49,8 @@ export async function openPreview(
   if (previousUrl) URL.revokeObjectURL(previousUrl)
   publish({ status: 'opening' })
 
-  if (uploadKind(file) !== 'still') {
+  const kind = uploadKind(file)
+  if (kind === 'unsupported') {
     await letOpeningPaint()
     publish({ status: 'error', message: ERROR_UNSUPPORTED_TYPE, interior: 'empty' })
     return null
@@ -64,6 +69,10 @@ export async function openPreview(
     return null
   }
 
-  publish({ status: 'content', src: url })
+  publish(
+    kind === 'animated'
+      ? { status: 'content', src: url, animated: true }
+      : { status: 'content', src: url },
+  )
   return url
 }
