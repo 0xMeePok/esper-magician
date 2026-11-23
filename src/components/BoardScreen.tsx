@@ -32,7 +32,7 @@ export default function BoardScreen({
       <div className="bezel-slot">
         <div className="bezel">
           <div className="bezel-opening">
-            <Viewport state={state} statusId={statusId} />
+            <Viewport state={state} statusId={statusId} width={screen.width} height={screen.height} />
           </div>
         </div>
       </div>

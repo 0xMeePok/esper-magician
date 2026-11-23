@@ -4,9 +4,7 @@ import {
   EMPTY_MESSAGE,
   LOADING_MESSAGE,
   OPENING_MESSAGE,
-  VIEWPORT_HEIGHT,
   VIEWPORT_LABEL,
-  VIEWPORT_WIDTH,
   contentShowsStillFrame,
   viewportColors,
   coverDrawRect,
@@ -16,6 +14,8 @@ import {
 type ViewportProps = {
   state: ViewportState
   statusId: string
+  width: number
+  height: number
   reducedMotion?: boolean
 }
 
@@ -42,7 +42,7 @@ function usePrefersReducedMotion(override: boolean | undefined): boolean {
   return override ?? reduced
 }
 
-export default function Viewport({ state, statusId, reducedMotion }: ViewportProps) {
+export default function Viewport({ state, statusId, width, height, reducedMotion }: ViewportProps) {
   return (
     <div
       className="viewport"
@@ -52,19 +52,24 @@ export default function Viewport({ state, statusId, reducedMotion }: ViewportPro
       data-state={state.status}
       data-interior={state.status === 'error' ? state.interior : undefined}
       style={{
-        width: VIEWPORT_WIDTH,
-        height: VIEWPORT_HEIGHT,
-        minWidth: VIEWPORT_WIDTH,
-        minHeight: VIEWPORT_HEIGHT,
-        maxWidth: VIEWPORT_WIDTH,
-        maxHeight: VIEWPORT_HEIGHT,
+        width,
+        height,
+        minWidth: width,
+        minHeight: height,
+        maxWidth: width,
+        maxHeight: height,
         flexShrink: 0,
         background: viewportColors.emptyFill,
         borderRadius: 0,
       }}
     >
       <div className="viewport__interior" aria-hidden="true">
-        <ViewportInterior state={state} reducedMotion={reducedMotion} />
+        <ViewportInterior
+          state={state}
+          width={width}
+          height={height}
+          reducedMotion={reducedMotion}
+        />
       </div>
     </div>
   )
@@ -72,14 +77,24 @@ export default function Viewport({ state, statusId, reducedMotion }: ViewportPro
 
 function ViewportInterior({
   state,
+  width,
+  height,
   reducedMotion,
 }: {
   state: ViewportState
+  width: number
+  height: number
   reducedMotion?: boolean
 }) {
   if (state.status === 'content') {
     return (
-      <ViewportContent src={state.src} animated={state.animated} reducedMotion={reducedMotion} />
+      <ViewportContent
+        src={state.src}
+        width={width}
+        height={height}
+        animated={state.animated}
+        reducedMotion={reducedMotion}
+      />
     )
   }
 
@@ -102,16 +117,20 @@ function ViewportInterior({
 
 function ViewportContent({
   src,
+  width,
+  height,
   animated,
   reducedMotion,
 }: {
   src: string
+  width: number
+  height: number
   animated?: boolean
   reducedMotion?: boolean
 }) {
   const prefersReducedMotion = usePrefersReducedMotion(reducedMotion)
   if (contentShowsStillFrame(src, animated, prefersReducedMotion)) {
-    return <StillFrame src={src} />
+    return <StillFrame src={src} width={width} height={height} />
   }
 
   return (
@@ -119,13 +138,13 @@ function ViewportContent({
       className="viewport__image"
       src={src}
       alt=""
-      width={VIEWPORT_WIDTH}
-      height={VIEWPORT_HEIGHT}
+      width={width}
+      height={height}
       style={{
-        width: VIEWPORT_WIDTH,
-        height: VIEWPORT_HEIGHT,
-        maxWidth: VIEWPORT_WIDTH,
-        maxHeight: VIEWPORT_HEIGHT,
+        width,
+        height,
+        maxWidth: width,
+        maxHeight: height,
         objectFit: 'cover',
         objectPosition: 'center',
       }}
@@ -133,7 +152,7 @@ function ViewportContent({
   )
 }
 
-function StillFrame({ src }: { src: string }) {
+function StillFrame({ src, width, height }: { src: string; width: number; height: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -146,8 +165,8 @@ function StillFrame({ src }: { src: string }) {
       if (cancelled) return
       const context = canvas.getContext('2d')
       if (!context) return
-      const rect = coverDrawRect(image.naturalWidth, image.naturalHeight)
-      context.clearRect(0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
+      const rect = coverDrawRect(image.naturalWidth, image.naturalHeight, width, height)
+      context.clearRect(0, 0, width, height)
       context.drawImage(
         image,
         rect.sx,
@@ -165,14 +184,15 @@ function StillFrame({ src }: { src: string }) {
     return () => {
       cancelled = true
     }
-  }, [src])
+  }, [src, width, height])
 
   return (
     <canvas
       ref={canvasRef}
       className="viewport__still"
-      width={VIEWPORT_WIDTH}
-      height={VIEWPORT_HEIGHT}
+      width={width}
+      height={height}
+      style={{ width, height, maxWidth: width, maxHeight: height }}
     />
   )
 }
