@@ -6,12 +6,12 @@ import Header from './components/Header.tsx'
 import ScreenPicker from './components/ScreenPicker.tsx'
 import TryYourOwnSection from './components/TryYourOwnSection.tsx'
 import { readStoredScreenId, screenFor, storeScreenId, type ScreenId } from './screens.ts'
-import { useUpload } from './useUpload.ts'
+import { usePreview } from './usePreview.ts'
 
 export default function App() {
   const [screenId, setScreenId] = useState<ScreenId>(() => readStoredScreenId())
   const screen = screenFor(screenId)
-  const upload = useUpload()
+  const preview = usePreview()
 
   function selectScreen(id: ScreenId) {
     setScreenId(id)
@@ -24,11 +24,11 @@ export default function App() {
       <main className="page-main">
         <div className="preview-column">
           <ScreenPicker selectedId={screenId} onSelect={selectScreen} />
-          <BoardScreen screen={screen} state={upload.state} />
+          <BoardScreen screen={screen} state={preview.state} />
         </div>
         <div className="controls">
-          <ExamplesSection />
-          <TryYourOwnSection onFile={upload.openFile} />
+          <ExamplesSection selectedId={preview.selectedExampleId} onSelect={preview.selectExample} />
+          <TryYourOwnSection onFile={preview.openFile} />
         </div>
       </main>
       <Footer />
