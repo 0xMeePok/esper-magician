@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import BoardScreen from './components/BoardScreen.tsx'
+import Viewport from './components/Viewport.tsx'
 import { screenFor } from './screens.ts'
 import { openPreview } from './upload.ts'
 import {
@@ -99,7 +100,7 @@ describe('upload preview', () => {
     const files = [
       new File(['hello'], 'notes.txt', { type: 'text/plain' }),
       new File([], 'empty.png', { type: 'image/png' }),
-      imageFile('clip.gif', 'image/gif'),
+      new File([], 'empty.gif', { type: 'image/gif' }),
       new File([bytes], 'mystery', { type: '' }),
     ]
 
@@ -150,5 +151,46 @@ describe('upload preview', () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith(first.url)
     expect(second.state).toEqual({ status: 'content', src: second.url })
     if (second.url) URL.revokeObjectURL(second.url)
+  })
+
+  it('shows a GIF in the viewport and holds the first frame when reduced motion is on', async () => {
+    const result = await preview(imageFile('loop.gif', 'image/gif'))
+    expect(result.states.map((state) => state.status)).toEqual(['opening', 'content'])
+    expect(result.state).toEqual({ status: 'content', src: result.url, animated: true })
+
+    const playing = renderToStaticMarkup(
+      <Viewport state={result.state!} statusId="screen-status" reducedMotion={false} />,
+    )
+    expect(playing).toContain('<img')
+    expect(playing).toContain('alt=""')
+    expect(playing).toContain('object-fit:cover')
+    expect(playing).toContain('object-position:center')
+    expect(playing).not.toContain('<canvas')
+
+    const still = renderToStaticMarkup(
+      <Viewport state={result.state!} statusId="screen-status" reducedMotion />,
+    )
+    expect(still).toContain('<canvas')
+    expect(still).toContain('width="320"')
+    expect(still).toContain('height="240"')
+    expect(still).not.toContain('<img')
+
+    const byExtension = await preview(imageFile('clip.GIF', ''))
+    expect(byExtension.state).toEqual({
+      status: 'content',
+      src: byExtension.url,
+      animated: true,
+    })
+    if (result.url) URL.revokeObjectURL(result.url)
+    if (byExtension.url) URL.revokeObjectURL(byExtension.url)
+  })
+
+  it('accepts a GIF of at least 4 MB', async () => {
+    const file = new File([new Uint8Array(4 * 1024 * 1024)], 'big.gif', { type: 'image/gif' })
+    const result = await preview(file)
+
+    expect(file.size).toBeGreaterThanOrEqual(4 * 1024 * 1024)
+    expect(result.state).toEqual({ status: 'content', src: result.url, animated: true })
+    if (result.url) URL.revokeObjectURL(result.url)
   })
 })
