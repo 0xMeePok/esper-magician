@@ -353,11 +353,15 @@ input {
   min-height: var(--screen-height);
   max-width: var(--screen-width);
   max-height: var(--screen-height);
-  padding-inline: 16px;
   background: var(--color-viewport);
   border-radius: 0;
   flex-shrink: 0;
   text-align: center;
+}
+
+.viewport[data-state='empty'],
+.viewport[data-state='error'] {
+  padding-inline: 16px;
 }
 
 .viewport-empty {
