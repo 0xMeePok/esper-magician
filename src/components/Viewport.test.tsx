@@ -296,6 +296,29 @@ describe('board screen', () => {
     expect(html.toLowerCase()).toContain('background:#2a2a2a')
   })
 
+  it('fills the opening with content and does not pad that state', () => {
+    const viewportRule = pageCss.match(/\.viewport\s*\{([^}]*)\}/)?.[1] ?? ''
+    expect(viewportRule).not.toContain('padding')
+    expect(pageCss).toMatch(
+      /\.viewport\[data-state='empty'\],\s*\.viewport\[data-state='error'\]\s*\{[^}]*padding-inline:\s*16px/,
+    )
+    expect(pageCss).not.toMatch(/\.viewport\[data-state='content'\]/)
+
+    for (const id of ['2.8', '1.9'] as const) {
+      const screen = screenFor(id)
+      const html = renderToStaticMarkup(
+        <BoardScreen screen={screen} state={{ status: 'content', src: '/photo.png' }} />,
+      )
+      expect(html).toContain('data-state="content"')
+      expect(html).toContain(`width:${screen.width}px`)
+      expect(html).toContain(`height:${screen.height}px`)
+      expect(html).toContain(`width="${screen.width}"`)
+      expect(html).toContain(`height="${screen.height}"`)
+      expect(html).toContain('object-fit:cover')
+      expect(html).not.toContain('padding')
+    }
+  })
+
   it('covers the opening with content and leaves the status slot empty', () => {
     const html = renderScreen({ status: 'content', src: '/examples/photo-frame.jpg' })
     expect(html).toContain('src="/examples/photo-frame.jpg"')
