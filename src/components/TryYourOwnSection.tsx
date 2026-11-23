@@ -1,6 +1,10 @@
 import { useRef } from 'react'
 
-export default function TryYourOwnSection() {
+type TryYourOwnSectionProps = {
+  onFile: (file: File) => void
+}
+
+export default function TryYourOwnSection({ onFile }: TryYourOwnSectionProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   return (
@@ -24,6 +28,12 @@ export default function TryYourOwnSection() {
           accept="image/jpeg,image/png,image/webp,image/gif"
           tabIndex={-1}
           aria-hidden="true"
+          onChange={(event) => {
+            const input = event.currentTarget
+            const file = input.files?.[0]
+            input.value = ''
+            if (file) onFile(file)
+          }}
         />
         <p id="upload-helper" className="helper">
           JPEG, PNG, WebP, or GIF. It stays in your browser.
