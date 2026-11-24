@@ -291,7 +291,7 @@ export function parseScreenCrops(value: unknown): ScreenCrops {
   if (typeof value !== 'object' || value === null) return {}
   const source = value as Record<string, unknown>
   const crops: ScreenCrops = {}
-  for (const id of ['2.8', '1.9'] as const) {
+  for (const id of ['1.9'] as const) {
     const crop = parseScreenCrop(source[id])
     if (crop) crops[id] = crop
   }

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ESPER screen</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; margin: 0; display: grid; place-items: center;
+         min-height: 100vh; background: #f6f5f1; color: #111; }
+  main { max-width: 22rem; padding: 1.5rem; text-align: center; }
+  progress { width: 100%; height: 0.75rem; }
+  a { color: #0f766e; }
+</style>
+</head>
+<body>
+<main>
+  <h1 style="font-size:1.25rem">ESPER screen</h1>
+  <p id="status">Waiting for the picture…</p>
+  <progress id="bar" max="1" value="0" hidden></progress>
+</main>
+<script>
+// Served by the screen itself. The website (on https) opens this page in a
+// small window and hands it the picture with postMessage; this page then sends
+// it to the screen on the same Wi-Fi. Keep in step with src/flash/wireless.ts.
+(function () {
+  var SITE = 'https://esper-magician.vercel.app';
+  var status = document.getElementById('status');
+  var bar = document.getElementById('bar');
+
+  function allowed(origin) {
+    return origin === SITE ||
+      /^https:\/\/esper-magician-[a-z0-9-]+\.vercel\.app$/.test(origin) ||
+      /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+  }
+
+  var opener = window.opener;
+  if (!opener) {
+    status.innerHTML = 'To change the picture, use <a href="' + SITE + '">esper-magician</a>.';
+    return;
+  }
+
+  function tell(origin, message) {
+    message.source = 'esper';
+    opener.postMessage(message, origin);
+  }
+
+  window.addEventListener('message', function (event) {
+    var data = event.data;
+    if (!allowed(event.origin) || !data || data.source !== 'esper-site' || data.type !== 'send') {
+      return;
+    }
+    var origin = event.origin;
+    status.textContent = 'Sending to your screen…';
+    bar.hidden = false;
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/media');
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+    xhr.upload.onprogress = function (e) {
+      if (e.lengthComputable) {
+        bar.value = e.loaded / e.total;
+        tell(origin, { type: 'progress', sent: e.loaded, total: e.total });
+      }
+    };
+    xhr.onload = function () {
+      var reply = {};
+      try { reply = JSON.parse(xhr.responseText); } catch (e) {}
+      if (xhr.status === 200 && reply.ok) {
+        status.textContent = 'Done. Your screen is showing it now.';
+        tell(origin, { type: 'done' });
+        setTimeout(function () { window.close(); }, 600);
+      } else {
+        status.textContent = reply.message || 'The screen couldn’t save the picture.';
+        tell(origin, { type: 'error', message: status.textContent });
+      }
+    };
+    xhr.onerror = function () {
+      status.textContent = 'The picture didn’t reach the screen.';
+      tell(origin, { type: 'error', message: status.textContent });
+    };
+    xhr.send(data.image);
+  });
+
+  // Say hello to whichever page opened us; it checks the details before sending.
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', '/info');
+  xhr.onload = function () {
+    var info = {};
+    try { info = JSON.parse(xhr.responseText); } catch (e) {}
+    info.type = 'ready';
+    info.source = 'esper';
+    opener.postMessage(info, '*');
+  };
+  xhr.send();
+})();
+</script>
+</body>
+</html>

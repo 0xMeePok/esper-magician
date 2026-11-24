@@ -28,7 +28,7 @@ import {
 } from './viewportState.ts'
 
 function renderScreen(state?: ViewportState) {
-  return renderToStaticMarkup(<BoardScreen screen={screenFor('2.8')} state={state} />)
+  return renderToStaticMarkup(<BoardScreen screen={screenFor('1.9')} state={state} />)
 }
 
 function contrastRatio(foreground: string, background: string) {
@@ -47,7 +47,7 @@ function contrastRatio(foreground: string, background: string) {
 describe('viewport state API', () => {
   it('keeps the exact copy later tickets need', () => {
     expect(VIEWPORT_LABEL).toBe('Screen preview')
-    expect(SCREEN_CAPTION).toBe('Your screen (320 \u00d7 240)')
+    expect(SCREEN_CAPTION).toBe('Your screen (170 \u00d7 320)')
     expect(EMPTY_MESSAGE).toBe('Nothing on the screen yet.')
     expect(EMPTY_HELPER).toBe('Pick an example or upload a picture.')
     expect(LOADING_MESSAGE).toBe('Loading\u2026')
@@ -133,7 +133,7 @@ describe('viewport state API', () => {
 })
 
 describe('selected screen viewport', () => {
-  function renderScreenSize(id: '1.9' | '2.8', state?: ViewportState) {
+  function renderScreenSize(id: '1.9', state?: ViewportState) {
     return renderToStaticMarkup(<BoardScreen screen={screenFor(id)} state={state} />)
   }
 
@@ -155,30 +155,15 @@ describe('selected screen viewport', () => {
     expect(html).toContain(`class="helper">${EMPTY_HELPER}</p>`)
   })
 
-  it('keeps 320×240 for the 2.8-inch screen', () => {
-    const html = renderScreenSize('2.8')
-    expect(html).toContain('--screen-width:320px')
-    expect(html).toContain('--screen-height:240px')
-    expect(html).toContain('width:320px')
-    expect(html).toContain('height:240px')
-    expect(html).not.toContain('width:170px')
-    expect(html).not.toContain('height:320px')
-    expect(html).toContain(SCREEN_CAPTION)
-    expect(html).toContain(`aria-label="${VIEWPORT_LABEL}"`)
-  })
-
-  it('switches viewport size and keeps the state that is showing', () => {
+  it('keeps the screen size whatever state is showing', () => {
     const loading = { status: 'loading' } as const
-    const landscape = renderScreenSize('2.8', loading)
     const portrait = renderScreenSize('1.9', loading)
 
-    expect(landscape).toContain('width:320px')
-    expect(landscape).toContain('height:240px')
     expect(portrait).toContain('width:170px')
     expect(portrait).toContain('height:320px')
     expect(portrait).not.toContain('width:320px')
 
-    for (const html of [landscape, portrait]) {
+    for (const html of [portrait]) {
       expect(html).toContain(LOADING_MESSAGE)
       expect(html).toContain('aria-live="polite"')
       expect(html).toContain(`class="visually-hidden">${LOADING_MESSAGE}</p>`)
@@ -227,7 +212,7 @@ describe('board screen', () => {
     expect(html).not.toContain('board-screen__scroll')
   })
 
-  it('renders an empty screen with helper text outside the 320×240 opening', () => {
+  it('renders an empty screen with helper text outside the 170×320 opening', () => {
     const html = renderScreen()
     expect(html).toContain('role="img"')
     expect(html).toContain('aria-live="polite"')
@@ -237,15 +222,15 @@ describe('board screen', () => {
     expect(html).toContain('class="crop-slot"')
     expect(html).not.toContain('>Crop<')
     const withUploads = renderToStaticMarkup(
-      <BoardScreen screen={screenFor('2.8')} libraryHasItems />,
+      <BoardScreen screen={screenFor('1.9')} libraryHasItems />,
     )
     expect(withUploads).toContain('Pick an example, upload a picture, or choose a saved upload.')
     expect(withUploads).not.toContain(`class="helper">${EMPTY_HELPER}</p>`)
-    expect(html).toContain('width:320px')
-    expect(html).toContain('height:240px')
+    expect(html).toContain('width:170px')
+    expect(html).toContain('height:320px')
     expect(html).toContain('class="bezel-slot"')
-    expect(html).toContain('--screen-width:320px')
-    expect(html).toContain('--screen-height:240px')
+    expect(html).toContain('--screen-width:170px')
+    expect(html).toContain('--screen-height:320px')
     expect(html.toLowerCase()).toContain('background:#2a2a2a')
     expect(html).not.toContain('overflow-x:auto')
     expect(html).not.toContain('width:352px')
@@ -318,7 +303,7 @@ describe('board screen', () => {
     )
     expect(pageCss).not.toMatch(/\.viewport\[data-state='content'\]/)
 
-    for (const id of ['2.8', '1.9'] as const) {
+    for (const id of ['1.9'] as const) {
       const screen = screenFor(id)
       const html = renderToStaticMarkup(
         <BoardScreen screen={screen} state={{ status: 'content', src: '/photo.png' }} />,
@@ -419,7 +404,6 @@ describe('viewport spec sheet', () => {
     expect(pageCss.match(/overflow-x:\s*auto/g)).toEqual(['overflow-x: auto'])
     expect(pageCss).toContain('.bezel-slot')
     expect(pageCss).toContain('--bezel-slot-height:')
-    expect(pageCss).toContain('min-width: calc(320px + (var(--bezel-frame) * 2))')
     expect(sheet).toContain('max-width: calc(320px + (var(--bezel-frame) * 2))')
     expect(sheet).not.toContain('calc(var(--screen-width) + (var(--bezel-frame) * 2))')
     expect(sheet).toContain('width: 100%')

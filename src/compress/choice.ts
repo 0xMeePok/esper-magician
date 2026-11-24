@@ -16,7 +16,7 @@ export function parseCompressedChoices(value: unknown): CompressedChoices {
   if (typeof value !== 'object' || value === null) return {}
   const source = value as Record<string, unknown>
   const choices: CompressedChoices = {}
-  for (const id of ['2.8', '1.9'] as const) {
+  for (const id of ['1.9'] as const) {
     const entry = source[id] as Partial<CompressedChoice> | undefined
     if (!entry || typeof entry !== 'object') continue
     if (!strengthById(String(entry.strength))) continue

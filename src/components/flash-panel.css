@@ -1,0 +1,158 @@
+.flash {
+  width: 100%;
+  max-width: calc(320px + (var(--bezel-frame) * 2));
+  margin-top: var(--space-4);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.button-primary {
+  width: 100%;
+  min-height: 48px;
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.button-primary:hover:not([aria-disabled='true']) {
+  background: #0d655e;
+}
+
+.button-primary[aria-disabled='true'] {
+  border-color: var(--color-line);
+  background: #e9e7e1;
+  color: var(--color-secondary);
+  cursor: not-allowed;
+}
+
+.flash__helper {
+  margin: 0;
+  text-align: center;
+}
+
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.flash__status {
+  display: grid;
+  gap: var(--space-2);
+  padding: 12px 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.flash__status p {
+  margin: 0;
+}
+
+.flash__status--done {
+  border-color: var(--color-accent);
+  background: var(--color-selected);
+}
+
+.flash__bar {
+  position: relative;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e9e7e1;
+}
+
+.flash__bar span {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+  transition: width 120ms linear;
+}
+
+.flash__bar--busy::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 30%;
+  border-radius: 999px;
+  background: var(--color-accent);
+  animation: flash-busy 1.2s ease-in-out infinite;
+}
+
+@keyframes flash-busy {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flash__bar span {
+    transition: none;
+  }
+  .flash__bar--busy::after {
+    animation: none;
+    width: 100%;
+    opacity: 0.4;
+  }
+}
+
+.flash__wifi {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.flash__wifi h3 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 24px;
+}
+
+.flash__wifi p {
+  margin: 0;
+}
+
+.flash__done {
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+.flash__wifi label {
+  display: grid;
+  gap: 4px;
+  font-weight: 600;
+}
+
+.flash__wifi input {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--color-radio);
+  border-radius: var(--radius-control);
+  font: inherit;
+  font-weight: 400;
+}
+
+.flash__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.flash__actions .button {
+  flex: 1;
+}

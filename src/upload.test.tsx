@@ -40,7 +40,7 @@ class FakeImage {
 }
 
 function render(state: ViewportState) {
-  return renderToStaticMarkup(<BoardScreen screen={screenFor('2.8')} state={state} />)
+  return renderToStaticMarkup(<BoardScreen screen={screenFor('1.9')} state={state} />)
 }
 
 async function preview(file: File, previousUrl: string | null = null) {
@@ -158,7 +158,7 @@ describe('upload preview', () => {
     expect(result.states.map((state) => state.status)).toEqual(['opening', 'content'])
     expect(result.state).toEqual({ status: 'content', src: result.url, animated: true })
 
-    const screen = screenFor('2.8')
+    const screen = screenFor('1.9')
     const playing = renderToStaticMarkup(
       <Viewport
         state={result.state!}
@@ -184,8 +184,8 @@ describe('upload preview', () => {
       />,
     )
     expect(still).toContain('<canvas')
-    expect(still).toContain('width="320"')
-    expect(still).toContain('height="240"')
+    expect(still).toContain('width="170"')
+    expect(still).toContain('height="320"')
     expect(still).not.toContain('<img')
 
     const byExtension = await preview(imageFile('clip.GIF', ''))

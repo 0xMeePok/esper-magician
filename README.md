@@ -1,19 +1,27 @@
 # ESPER-MAGICIAN
 
-A free, open-source site that previews pictures and examples on two small color screens:
+A free, open-source site that previews pictures and examples on a small color screen, and puts them on it with one click:
 
-- 2.8-inch (ESP32-2432S028R), 320×240
-- 1.9-inch (Estardyn), 170×320
+- 1.9-inch ST7789, 170×320, on an ESP32 DevKit (ESP32-WROOM-32E, 4 MB flash)
 
-V1 is a simulator. It does not flash the device. In the browser you can:
+In the browser you can:
 
 - Pick one of four examples: Photo frame, Animation loop, Digital clock, Info card.
 - Upload a JPEG, PNG, WebP, or GIF. Pictures are shown whole (`object-fit: contain`) with dark bars where the shape doesn't match the screen.
 - Find past uploads under **My uploads**. They are saved in this browser's IndexedDB and never leave the device.
-- Crop and rotate an upload for each screen. The original file is kept; the crop is saved as settings per screen, and GIFs keep playing.
-- If an upload is too big for the device's picture space (3.56 MB on a 4 MB board, see `firmware/partitions.media.csv`), pick Light, Balanced or Strong compression and preview the result on the screen. Pictures use MozJPEG (via jSquash) and GIFs use gifuct-js + gifenc, all in a Web Worker in the browser. The compressed copy is what gets flashed.
+- Crop and rotate an upload. The original file is kept; the crop is saved as settings, and GIFs keep playing.
+- If an upload is too big for the screen's picture space (3.06 MB, see `firmware/partitions.media.csv`), pick Light, Balanced or Strong compression and preview the result on the screen. Pictures use MozJPEG (via jSquash) and GIFs use gifuct-js + gifenc, all in a Web Worker in the browser.
+- Click **Put it on my screen** (ASH-19). Everything except the Digital clock can go on the screen.
 
-`firmware/` holds an ESP-IDF app that shows a picture or GIF on either screen (2.8-inch ESP32-2432S028R, or the 1.9-inch ST7789 on an ESP32 DevKit). See [firmware/README.md](firmware/README.md) for how to build and flash it.
+## Put it on my screen
+
+**The first time, over USB.** Plug the screen in and click the button. Chrome or Edge shows its device list once; pick the board. The site installs the player and the picture with [esptool-js](https://github.com/espressif/esptool-js) (Espressif's own flasher) over Web Serial, restarts the screen, and asks for the Wi-Fi name and password. Those go to the screen over USB with [Improv Serial](https://www.improv-wifi.com/serial/), and the screen reports its address on the Wi-Fi, which the site remembers.
+
+**Every time after, over Wi-Fi.** The site is on https and the screen serves plain http on the home network, so the site can't call it directly. Instead it opens the screen's own page (`firmware/main/receiver.html`) in a small window and hands it the picture with `postMessage`; that page posts it to the screen, which saves it and shows it. The computer has to be on the same Wi-Fi. This part doesn't need Web Serial, so it should also work in other browsers and on phones, though that hasn't been tried yet.
+
+What gets sent is always made for the screen: a baseline JPEG, or a GIF, no bigger than 170×320. A compressed choice is sent exactly as previewed. Anything else (an upload that fits, an example, the Info card drawn on a canvas) goes through the same compressor at the lightest strength that fits. Nothing is uploaded to a server.
+
+The firmware the site installs lives in `public/firmware/esper-1.9/`, with a manifest the site checks every download against. Rebuild it with `firmware/tools/build_web.sh` after changing the firmware. See [firmware/README.md](firmware/README.md).
 
 ## Install
 
@@ -26,6 +34,14 @@ npm install
 ```bash
 npm run dev
 ```
+
+## Tests
+
+```bash
+npm test
+```
+
+`src/flash/deviceFormat.test.ts` compiles the player's own C code (the GIF decoder, the media header check and Improv Serial) with the computer's C compiler and runs it on exactly what the site produces. It is skipped where there is no `cc`.
 
 ## Production build
 
@@ -43,7 +59,9 @@ Flags are Vite env vars, read at build time in `src/features.ts`.
 
 | Flag | Default | What it does |
 | --- | --- | --- |
-| `VITE_FACTORY_APP` | off | Adds the 640 KB factory app (Wi-Fi + OTA downloader, ASH-33) that holding BOOT goes back to (ASH-32). Turning it on shrinks picture space from 3.56 MB to 2.93 MB. |
+| `VITE_FACTORY_APP` | off | Adds the 640 KB factory app (Wi-Fi + OTA downloader, ASH-33) that holding BOOT goes back to (ASH-32). Turning it on shrinks picture space from 3.06 MB to 2.43 MB. |
+
+The factory app itself isn't built yet (ASH-33). With the flag on, the site uses the factory layout, and **Put it on my screen** refuses to install until firmware for that layout is in `public/firmware/`.
 
 To turn the factory app on:
 
@@ -52,5 +70,4 @@ To turn the factory app on:
 3. **Firmware:** build the player with `firmware/partitions.factory.csv` instead of `firmware/partitions.media.csv`
    (`CONFIG_PARTITION_TABLE_CUSTOM_FILENAME` in `sdkconfig.defaults`), and flash the factory app at `0x10000`.
 
-The two partition tables match `PLAYER_ONLY_LAYOUT` and `FACTORY_LAYOUT` in `src/flashLayout.ts`, and a test checks that they stay in step. Every device must use the same layout as the site that flashes it. Switching the flag on later means re-flashing devices once over USB.
-
+The two partition tables match `PLAYER_ONLY_LAYOUT` and `FACTORY_LAYOUT` in `src/flashLayout.ts`, and a test checks that they stay in step. Every device must use the same layout as the site that flashes it. Switching the flag later means re-installing each screen once over USB.

@@ -190,7 +190,7 @@ describe('crop geometry', () => {
     expect(parseScreenCrop(good)).toEqual(good)
     expect(parseScreenCrop({ ...good, rotationDeg: 45 })).toBeNull()
     expect(parseScreenCrop({ ...good, cropRect: { x: 1, y: 2, width: 0, height: 4 } })).toBeNull()
-    expect(parseScreenCrops({ '2.8': good, '1.9': 'nope', '9.9': good })).toEqual({ '2.8': good })
+    expect(parseScreenCrops({ '1.9': good, '2.8': good, '9.9': good })).toEqual({ '1.9': good })
     expect(parseScreenCrops(null)).toEqual({})
 
     const one = withScreenCrop({}, '1.9', good as ScreenCrop)

@@ -1,12 +1,20 @@
-# Both boards (ESP32-2432S028R, and the ESP32 DevKit for the 1.9-inch screen)
-# have a classic ESP32 with 4 MB of flash.
+# The ESPER screen: a 1.9-inch ST7789 on an ESP32 DevKit (ESP32-WROOM-32E, 4 MB flash).
 CONFIG_IDF_TARGET="esp32"
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
 
-# Bigger app partition so a short GIF fits (see partitions.csv).
+# The player, then everything else for the picture (see partitions.media.csv).
 CONFIG_PARTITION_TABLE_CUSTOM=y
-CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.media.csv"
 
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
-CONFIG_COMPILER_OPTIMIZATION_PERF=y
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+
+# Wi-Fi: station only, on a home network.
+CONFIG_ESP_WIFI_SOFTAP_SUPPORT=n
+CONFIG_ESP_WIFI_ENTERPRISE_SUPPORT=n
+CONFIG_LWIP_IPV6=n
+CONFIG_BT_ENABLED=n
+
+# The same source always builds the same binary, so the website's copy can be checked.
+CONFIG_APP_REPRODUCIBLE_BUILD=y

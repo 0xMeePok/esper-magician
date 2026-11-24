@@ -166,7 +166,7 @@ describe('example picker (ASH-17)', () => {
   })
 
   it('contains the Animation loop GIF and stills it for reduced motion on both screens', () => {
-    for (const id of ['2.8', '1.9'] as const) {
+    for (const id of ['1.9'] as const) {
       const screen = screenFor(id)
       const state: ViewportState = {
         status: 'content',
@@ -267,7 +267,7 @@ describe('Info card', () => {
 })
 
 describe('examples on the page', () => {
-  it('selects each example and previews it on both screens', async () => {
+  it('selects each example and previews it on the screen', async () => {
     const container = await mountApp()
     for (const example of examples) {
       await click(row(container, example.title))
@@ -278,8 +278,7 @@ describe('examples on the page', () => {
       expect(selected?.textContent).toContain(example.title)
       expect(selected?.textContent).toContain('On the screen')
 
-      for (const id of ['1.9', '2.8'] as const) {
-        await click(container.querySelector(`input[value="${id}"]`))
+      for (const id of ['1.9'] as const) {
         const screen = screenFor(id)
         const viewport = container.querySelector('.viewport')
         expect(viewport?.getAttribute('style')).toContain(`width: ${screen.width}px`)
@@ -294,7 +293,6 @@ describe('examples on the page', () => {
         } else {
           throw new Error(`unexpected example ${example.id}`)
         }
-        // Still selected after switching screens.
         expect(container.querySelector('[role="radio"][aria-checked="true"]')?.textContent).toContain(
           example.title,
         )
@@ -323,7 +321,7 @@ describe('examples on the page', () => {
   })
 
   it('previews each example inside the bezel at the screen size', () => {
-    for (const id of ['2.8', '1.9'] as const) {
+    for (const id of ['1.9'] as const) {
       const screen = screenFor(id)
       const card = renderToStaticMarkup(
         <BoardScreen screen={screen} state={{ status: 'layout', layout: 'card' }} />,

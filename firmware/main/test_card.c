@@ -10,7 +10,7 @@
 
 #include "board.h"
 #include "esp_check.h"
-#include "picture_player.h"
+#include "screen.h"
 
 #define WHITE   0xFFFF
 #define BLACK   0x0000
@@ -33,7 +33,7 @@ static uint16_t grey(int level, int steps)
     return (uint16_t)(((v >> 3) << 11) | ((v >> 2) << 5) | (v >> 3));
 }
 
-esp_err_t test_card_draw(esp_lcd_panel_handle_t panel)
+esp_err_t test_card_draw(void)
 {
     const int w = BOARD_LCD_WIDTH, h = BOARD_LCD_HEIGHT;
     const int bars_top = h / 8;
@@ -41,30 +41,30 @@ esp_err_t test_card_draw(esp_lcd_panel_handle_t panel)
     const int ramp_top = bars_top + bars_h + h / 16;
     const int ramp_h = h / 8;
 
-    ESP_RETURN_ON_ERROR(cyd_fill_screen(panel, BLACK), "card", "fill");
+    ESP_RETURN_ON_ERROR(screen_fill(BLACK), "card", "fill");
 
     // Corner marker, one row at a time.
     const int corner = bars_top - 4;
     for (int row = 0; row < corner; row++) {
-        ESP_RETURN_ON_ERROR(cyd_fill_rect(panel, 0, row, corner - row, 1, WHITE), "card", "corner");
+        ESP_RETURN_ON_ERROR(screen_fill_rect(0, row, corner - row, 1, WHITE), "card", "corner");
     }
 
     for (int i = 0; i < (int)BAR_COUNT; i++) {
         int x0 = i * w / (int)BAR_COUNT, x1 = (i + 1) * w / (int)BAR_COUNT;
-        ESP_RETURN_ON_ERROR(cyd_fill_rect(panel, x0, bars_top, x1 - x0, bars_h, BARS[i]),
+        ESP_RETURN_ON_ERROR(screen_fill_rect(x0, bars_top, x1 - x0, bars_h, BARS[i]),
                             "card", "bar");
     }
 
     for (int i = 0; i < GREY_STEPS; i++) {
         int x0 = i * w / GREY_STEPS, x1 = (i + 1) * w / GREY_STEPS;
-        ESP_RETURN_ON_ERROR(cyd_fill_rect(panel, x0, ramp_top, x1 - x0, ramp_h,
+        ESP_RETURN_ON_ERROR(screen_fill_rect(x0, ramp_top, x1 - x0, ramp_h,
                                           grey(i, GREY_STEPS)), "card", "ramp");
     }
 
     // Frame, drawn last so it sits on top of everything.
-    ESP_RETURN_ON_ERROR(cyd_fill_rect(panel, 0, 0, w, 1, WHITE), "card", "frame");
-    ESP_RETURN_ON_ERROR(cyd_fill_rect(panel, 0, h - 1, w, 1, WHITE), "card", "frame");
-    ESP_RETURN_ON_ERROR(cyd_fill_rect(panel, 0, 0, 1, h, WHITE), "card", "frame");
-    ESP_RETURN_ON_ERROR(cyd_fill_rect(panel, w - 1, 0, 1, h, WHITE), "card", "frame");
+    ESP_RETURN_ON_ERROR(screen_fill_rect(0, 0, w, 1, WHITE), "card", "frame");
+    ESP_RETURN_ON_ERROR(screen_fill_rect(0, h - 1, w, 1, WHITE), "card", "frame");
+    ESP_RETURN_ON_ERROR(screen_fill_rect(0, 0, 1, h, WHITE), "card", "frame");
+    ESP_RETURN_ON_ERROR(screen_fill_rect(w - 1, 0, 1, h, WHITE), "card", "frame");
     return ESP_OK;
 }

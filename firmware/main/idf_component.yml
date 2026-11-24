@@ -1,3 +1,4 @@
 dependencies:
   idf: ">=5.2"
-  espressif/esp_lcd_ili9341: "^2.0.0"
+  # Lets the website find the screen as esper-xxxxxx.local on your Wi-Fi.
+  espressif/mdns: "^1.4.0"
