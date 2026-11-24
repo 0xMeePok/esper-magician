@@ -31,7 +31,7 @@ export const FOUR_MB_LAYOUT: FlashLayout = {
   ],
 }
 
-/** Each screen's board. The 1.9-inch board's flash size is still to be confirmed (ASH-33). */
+/** Each screen's board. Both are classic ESP32 boards with 4 MB of flash (confirmed 2026-11-24). */
 export const FLASH_LAYOUTS: Record<ScreenId, FlashLayout> = {
   '2.8': FOUR_MB_LAYOUT,
   '1.9': FOUR_MB_LAYOUT,
