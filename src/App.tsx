@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import BoardScreen from './components/BoardScreen.tsx'
+import CompressionPanel from './components/CompressionPanel.tsx'
 import CropControl from './components/CropControl.tsx'
 import CropEditor from './components/CropEditor.tsx'
 import ExamplesSection from './components/ExamplesSection.tsx'
@@ -9,6 +10,7 @@ import MyUploadsSection from './components/MyUploadsSection.tsx'
 import ScreenPicker from './components/ScreenPicker.tsx'
 import TryYourOwnSection from './components/TryYourOwnSection.tsx'
 import { readStoredScreenId, screenFor, storeScreenId, type ScreenId } from './screens.ts'
+import { useCompression } from './compress/useCompression.ts'
 import { useScreenContent } from './useScreenContent.ts'
 
 export default function App() {
@@ -20,6 +22,8 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const returnFocus = useRef(false)
   const current = content.current
+  const compression = useCompression(current, screenId, content.chooseCompression)
+  const showOriginal = compression.state.visible && compression.state.showingOriginal
   const editorOpen = editing && current !== null
 
   useEffect(() => {
@@ -59,7 +63,7 @@ export default function App() {
             <ScreenPicker selectedId={screenId} onSelect={selectScreen} />
             <BoardScreen
               screen={screen}
-              state={content.viewportFor(screenId)}
+              state={content.viewportFor(screenId, showOriginal)}
               libraryHasItems={content.libraryHasItems}
               cropControl={
                 <CropControl
@@ -71,6 +75,11 @@ export default function App() {
                   onOpen={() => setEditing(true)}
                 />
               }
+            />
+            <CompressionPanel
+              state={compression.state}
+              onSelect={compression.select}
+              onToggleOriginal={compression.toggleOriginal}
             />
           </div>
           <div className="controls">

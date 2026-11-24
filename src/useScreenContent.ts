@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { withChoice, type CompressedChoice, type CompressedChoices } from './compress/choice.ts'
+import { cropKey } from './compress/frames.ts'
+import type { StrengthId } from './compress/strengths.ts'
 import { withScreenCrop, type ScreenCrop, type ScreenCrops, type Size } from './crop.ts'
+import { mediaBudget } from './flashLayout.ts'
 import { exampleById } from './examples.ts'
 import { keepsCurrentExample, showExample, showUpload } from './preview.ts'
 import { screenFor, type ScreenId } from './screens.ts'
@@ -26,6 +30,30 @@ export type CurrentUpload = {
   url: string
   source: Size
   crops: ScreenCrops
+  /** The original file and its size, which decides whether it needs compressing (ASH-34). */
+  file: Blob
+  bytes: number
+  /** Per-screen compressed copies (ASH-35). */
+  compressed: CompressedChoices
+}
+
+/** What ASH-19 flashes for a screen. Null when there is nothing to flash yet. */
+export type ScreenAsset =
+  | { kind: 'example'; id: string }
+  | { kind: 'upload'; name: string; type: string; blob: Blob; compressed: StrengthId | null }
+
+/** The compressed copy for a screen, if it was made with that screen's current crop. */
+export function activeChoice(
+  current: CurrentUpload | null,
+  screenId: ScreenId,
+): CompressedChoice | null {
+  const choice = current?.compressed[screenId]
+  if (!current || !choice) return null
+  return choice.cropKey === cropKey(current.crops[screenId]) ? choice : null
+}
+
+export function needsCompression(current: CurrentUpload | null, screenId: ScreenId): boolean {
+  return current !== null && current.bytes > mediaBudget(screenId)
 }
 
 export function cropAnnouncement(screenId: ScreenId, applied: boolean): string {
@@ -62,6 +90,7 @@ export function useScreenContent() {
   const clockRef = useRef(0)
   const waitsRef = useRef<number[]>([])
   const thumbUrls = useRef(new Map<string, { blob: Blob; url: string }>())
+  const choiceUrls = useRef(new Map<Blob, string>())
 
   useEffect(() => {
     listRef.current = list
@@ -112,6 +141,24 @@ export function useScreenContent() {
   }, [list.items])
 
   useEffect(() => {
+    const keep = new Set(Object.values(current?.compressed ?? {}).map((choice) => choice?.blob))
+    for (const [blob, url] of choiceUrls.current) {
+      if (keep.has(blob)) continue
+      URL.revokeObjectURL(url)
+      choiceUrls.current.delete(blob)
+    }
+  }, [current])
+
+  function urlFor(blob: Blob): string {
+    let url = choiceUrls.current.get(blob)
+    if (!url) {
+      url = URL.createObjectURL(blob)
+      choiceUrls.current.set(blob, url)
+    }
+    return url
+  }
+
+  useEffect(() => {
     let cancelled = false
     void (async () => {
       const opened = await openLibrary()
@@ -133,6 +180,7 @@ export function useScreenContent() {
     const url = urlRef
     const waits = waitsRef
     const cache = thumbUrls.current
+    const choices = choiceUrls.current
     return () => {
       cancelled = true
       request.current += 1
@@ -141,6 +189,8 @@ export function useScreenContent() {
       for (const id of waits.current) window.clearInterval(id)
       for (const entry of cache.values()) URL.revokeObjectURL(entry.url)
       cache.clear()
+      for (const url of choices.values()) URL.revokeObjectURL(url)
+      choices.clear()
     }
   }, [])
 
@@ -167,6 +217,7 @@ export function useScreenContent() {
     file: File,
     savedId: string | null,
     crops: ScreenCrops,
+    compressed: CompressedChoices,
   ): Promise<{ request: number; url: string | null }> {
     const request = ++requestRef.current
     const previous = urlRef.current
@@ -182,6 +233,9 @@ export function useScreenContent() {
         url: media.url,
         source: { width: media.width, height: media.height },
         crops,
+        file,
+        bytes: file.size,
+        compressed,
       })
     }
     const url = await showUpload(
@@ -196,7 +250,7 @@ export function useScreenContent() {
 
   async function openFile(file: File) {
     dispatch({ type: 'cleared' })
-    const { request, url } = await showFile(file, null, {})
+    const { request, url } = await showFile(file, null, {}, {})
     if (!url) return
     if (phaseRef.current === 'loading') await waitForPhase()
     if (phaseRef.current !== 'ready') return
@@ -214,10 +268,11 @@ export function useScreenContent() {
       dispatch({ type: 'added', record, select: stillShowing })
       const showing = currentRef.current
       if (stillShowing && showing && showing.url === url) {
-        // Crops made before the save finished go along with the new record.
-        const saved = { ...record, crops: showing.crops }
+        // Crops and compressed copies made before the save finished go along with the record.
+        const saved = { ...record, crops: showing.crops, compressed: showing.compressed }
         setCurrentUpload({ ...showing, savedId: record.id })
-        if (Object.keys(showing.crops).length > 0) void persistCrops(saved)
+        const edits = Object.keys(showing.crops).length + Object.keys(showing.compressed).length
+        if (edits > 0) void persistRecord(saved)
       }
     } catch (error) {
       if (requestRef.current === request && isQuotaError(error)) dispatch({ type: 'quota' })
@@ -229,7 +284,7 @@ export function useScreenContent() {
     if (!record) return
     dispatch({ type: 'selected', id })
     const file = new File([record.blob], record.name, { type: record.type })
-    void showFile(file, record.id, record.crops ?? {})
+    void showFile(file, record.id, record.crops ?? {}, record.compressed ?? {})
   }
 
   function selectExample(id: string) {
@@ -261,12 +316,12 @@ export function useScreenContent() {
     setViewport({ status: 'empty' })
   }
 
-  async function persistCrops(record: UploadRecord) {
+  async function persistRecord(record: UploadRecord) {
     try {
       await saveUpload(record)
       dispatch({ type: 'updated', record })
     } catch {
-      // The crop still applies for this visit; it just won't survive a reload.
+      // The edit still applies for this visit; it just won't survive a reload.
     }
   }
 
@@ -284,7 +339,45 @@ export function useScreenContent() {
     if (!showing.savedId) return
     const record = listRef.current.items.find((item) => item.id === showing.savedId)
     if (!record) return
-    void persistCrops({ ...record, crops })
+    void persistRecord({ ...record, crops, compressed: showing.compressed })
+  }
+
+  /** ASH-35: keeps (or with null, drops) the compressed copy for one screen. */
+  function chooseCompression(screenId: ScreenId, choice: CompressedChoice | null) {
+    const showing = currentRef.current
+    if (!showing) return
+    const compressed = withChoice(showing.compressed, screenId, choice)
+    setCurrentUpload({ ...showing, compressed })
+    if (!showing.savedId) return
+    const record = listRef.current.items.find((item) => item.id === showing.savedId)
+    if (!record) return
+    void persistRecord({ ...record, crops: showing.crops, compressed })
+  }
+
+  /** The screen preview. With `original`, a compressed copy is ignored (the compare toggle). */
+  function viewportFor(screenId: ScreenId, original = false): ViewportState {
+    const base = viewportForScreen(viewport, current, screenId)
+    const showing = viewport.status === 'content' && current && viewport.src === current.url
+    const choice = showing && !original ? activeChoice(current, screenId) : null
+    if (!choice) return base
+    // Already turned, cropped and scaled to the screen, so no crop is applied again.
+    return { status: 'content', src: urlFor(choice.blob), animated: choice.type === 'image/gif' }
+  }
+
+  /** ASH-35: exactly what ASH-19 will flash for a screen. */
+  function assetFor(screenId: ScreenId): ScreenAsset | null {
+    if (selectedExampleId && viewport.status !== 'loading') {
+      return { kind: 'example', id: selectedExampleId }
+    }
+    const showing = viewport.status === 'content' && current && viewport.src === current.url
+    if (!showing || !current) return null
+    if (!needsCompression(current, screenId)) {
+      const type = current.file.type
+      return { kind: 'upload', name: current.name, type, blob: current.file, compressed: null }
+    }
+    const choice = activeChoice(current, screenId)
+    if (!choice) return null
+    return { kind: 'upload', name: current.name, type: choice.type, blob: choice.blob, compressed: choice.strength }
   }
 
   const canCrop =
@@ -292,7 +385,8 @@ export function useScreenContent() {
 
   return {
     viewport,
-    viewportFor: (screenId: ScreenId) => viewportForScreen(viewport, current, screenId),
+    viewportFor,
+    assetFor,
     selectedExampleId,
     current: canCrop ? current : null,
     canCrop,
@@ -309,5 +403,6 @@ export function useScreenContent() {
     selectExample,
     removeUpload,
     applyCrop,
+    chooseCompression,
   }
 }

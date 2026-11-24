@@ -11,6 +11,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@jsquash/jpeg": "^1.6.0",
+    "gifenc": "^1.0.3",
+    "gifuct-js": "^2.1.2",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
