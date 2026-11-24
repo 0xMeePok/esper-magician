@@ -5,7 +5,18 @@ import { applyPalette, GIFEncoder, quantize } from 'gifenc'
 import { decompressFrames, parseGIF } from 'gifuct-js'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { initialCrop, type ScreenCrop } from '../crop.ts'
-import { FLASH_LAYOUTS, formatBytes, MEDIA_HEADER_BYTES, mediaBudget, partition } from '../flashLayout.ts'
+import { FACTORY_APP_ENABLED } from '../features.ts'
+import {
+  FACTORY_LAYOUT,
+  FLASH_LAYOUTS,
+  flashLayout,
+  formatBytes,
+  MEDIA_HEADER_BYTES,
+  mediaBudget,
+  partition,
+  PLAYER_APP_BYTES,
+  PLAYER_ONLY_LAYOUT,
+} from '../flashLayout.ts'
 import { screenFor } from '../screens.ts'
 import { BACKGROUND, cropKey, flatten, targetSize, transformFrame, type Frame } from './frames.ts'
 import { compressGif, gifFrames, playbackDelay } from './gif.ts'
@@ -65,38 +76,62 @@ function readGif(bytes: Uint8Array) {
   return { parsed, frames: decompressFrames(parsed, true) }
 }
 
-describe('flash layout (ASH-33)', () => {
-  it('tiles 4 MB exactly with a 640 KB factory app and 64 KB-aligned apps', () => {
-    const layout = FLASH_LAYOUTS['2.8']
-    const parts = layout.partitions
-    for (let i = 1; i < parts.length; i++) {
-      expect(parts[i]!.offset).toBe(parts[i - 1]!.offset + parts[i - 1]!.size)
-    }
-    expect(parts.at(-1)!.offset + parts.at(-1)!.size).toBe(layout.flashBytes)
-    expect(partition(layout, 'factory')).toMatchObject({ offset: 0x10000, size: 640 * 1024 })
-    for (const app of parts.filter((part) => part.type === 'app')) expect(app.offset % 0x10000).toBe(0)
-    expect(partition(layout, 'otadata').size).toBe(0x2000)
-  })
-
-  it('matches the planned partition table in firmware/partitions.ota.csv', () => {
-    const csv = readFileSync(join(process.cwd(), 'firmware', 'partitions.ota.csv'), 'utf8')
-    const rows = csv
-      .split('\n')
-      .filter((line) => line.trim() && !line.startsWith('#'))
-      .map((line) => line.split(',').map((cell) => cell.trim()))
-    expect(rows.map(([name, type, subtype, offset, size]) => ({
+function readCsv(name: string) {
+  const csv = readFileSync(join(process.cwd(), 'firmware', name), 'utf8')
+  return csv
+    .split('\n')
+    .filter((line) => line.trim() && !line.startsWith('#'))
+    .map((line) => line.split(',').map((cell) => cell.trim()))
+    .map(([name, type, subtype, offset, size]) => ({
       name,
       type,
       subtype,
       offset: Number(offset),
       size: Number(size),
-    }))).toEqual(FLASH_LAYOUTS['2.8'].partitions)
+    }))
+}
+
+describe('flash layout (ASH-33)', () => {
+  it.each([
+    ['factory app off', PLAYER_ONLY_LAYOUT],
+    ['factory app on', FACTORY_LAYOUT],
+  ])('tiles 4 MB exactly with 64 KB-aligned apps and a 384 KB player (%s)', (_, layout) => {
+    const parts = layout.partitions
+    for (let i = 1; i < parts.length; i++) {
+      expect(parts[i]!.offset).toBe(parts[i - 1]!.offset + parts[i - 1]!.size)
+    }
+    expect(parts[0]!.offset).toBe(0x9000)
+    expect(parts.at(-1)!.offset + parts.at(-1)!.size).toBe(layout.flashBytes)
+    for (const app of parts.filter((part) => part.type === 'app')) expect(app.offset % 0x10000).toBe(0)
+    expect(parts.filter((part) => part.type === 'app').at(-1)!.size).toBe(PLAYER_APP_BYTES)
+    expect(PLAYER_APP_BYTES).toBe(384 * 1024)
   })
 
-  it('leaves 1,896,448 bytes for one picture on each screen and formats sizes plainly', () => {
+  it('has no factory app unless the flag is on', () => {
+    expect(FACTORY_APP_ENABLED).toBe(false)
+    expect(flashLayout()).toBe(PLAYER_ONLY_LAYOUT)
+    expect(FLASH_LAYOUTS['2.8']).toBe(PLAYER_ONLY_LAYOUT)
+    expect(FLASH_LAYOUTS['1.9']).toBe(PLAYER_ONLY_LAYOUT)
+    expect(PLAYER_ONLY_LAYOUT.partitions.map((part) => part.name)).toEqual(['nvs', 'player', 'media'])
+    expect(partition(PLAYER_ONLY_LAYOUT, 'player')).toMatchObject({ offset: 0x10000, subtype: 'factory' })
+
+    expect(flashLayout(true)).toBe(FACTORY_LAYOUT)
+    expect(partition(FACTORY_LAYOUT, 'factory')).toMatchObject({ offset: 0x10000, size: 640 * 1024 })
+    expect(partition(FACTORY_LAYOUT, 'otadata').size).toBe(0x2000)
+  })
+
+  it('matches the partition tables in firmware/', () => {
+    expect(readCsv('partitions.media.csv')).toEqual(PLAYER_ONLY_LAYOUT.partitions)
+    expect(readCsv('partitions.factory.csv')).toEqual(FACTORY_LAYOUT.partitions)
+  })
+
+  it('leaves 3.56 MB for one picture on each screen (2.93 MB with the factory app) and formats sizes plainly', () => {
     expect(MEDIA_HEADER_BYTES).toBe(4096)
-    expect(mediaBudget('2.8')).toBe(1_896_448)
-    expect(mediaBudget('1.9')).toBe(1_896_448)
+    expect(mediaBudget('2.8')).toBe(3_731_456)
+    expect(mediaBudget('1.9')).toBe(3_731_456)
+    expect(formatBytes(3_731_456)).toBe('3.56 MB')
+    expect(partition(FACTORY_LAYOUT, 'media').size - MEDIA_HEADER_BYTES).toBe(3_076_096)
+    expect(formatBytes(3_076_096)).toBe('2.93 MB')
     expect(formatBytes(1_896_448)).toBe('1.81 MB')
     expect(formatBytes(4_214_393)).toBe('4.02 MB')
     expect(formatBytes(640 * 1024)).toBe('640 KB')

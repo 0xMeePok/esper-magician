@@ -1,9 +1,0 @@
-# Planned 4 MB flash map for flashing from the website (ASH-33, ASH-19).
-# Not used by the current player yet: it still builds with partitions.csv (one big app).
-# Keep in step with src/flashLayout.ts.
-# Name,  Type, SubType, Offset,   Size
-nvs,     data, nvs,     0x9000,   0x5000
-otadata, data, ota,     0xe000,   0x2000
-factory, app,  factory, 0x10000,  0xA0000
-ota_0,   app,  ota_0,   0xB0000,  0x180000
-media,   data, 0x40,    0x230000, 0x1D0000

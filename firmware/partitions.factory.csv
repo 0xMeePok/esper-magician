@@ -1,0 +1,10 @@
+# 4 MB flash map with the factory app ON (VITE_FACTORY_APP=true, ASH-33, ASH-19).
+# A 640 KB Wi-Fi + OTA downloader, one 384 KB slot for the player, then pictures.
+# Not used by the current player yet: it still builds with partitions.csv (one big app).
+# Keep in step with FACTORY_LAYOUT in src/flashLayout.ts.
+# Name,  Type, SubType, Offset,   Size
+nvs,     data, nvs,     0x9000,   0x5000
+otadata, data, ota,     0xe000,   0x2000
+factory, app,  factory, 0x10000,  0xA0000
+ota_0,   app,  ota_0,   0xB0000,  0x60000
+media,   data, 0x40,    0x110000, 0x2F0000
