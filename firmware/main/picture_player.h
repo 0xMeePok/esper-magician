@@ -45,5 +45,9 @@ bool cyd_picture_on_trans_done(esp_lcd_panel_io_handle_t io,
                                esp_lcd_panel_io_event_data_t *edata,
                                void *user_ctx);
 
+// Fills a rectangle with one RGB565 colour.
+esp_err_t cyd_fill_rect(esp_lcd_panel_handle_t panel, int x, int y, int w, int h,
+                        uint16_t rgb565);
+
 // Fills the whole screen with one RGB565 colour.
 esp_err_t cyd_fill_screen(esp_lcd_panel_handle_t panel, uint16_t rgb565);
