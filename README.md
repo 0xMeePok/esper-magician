@@ -12,7 +12,7 @@ V1 is a simulator. It does not flash the device. In the browser you can:
 - Find past uploads under **My uploads**. They are saved in this browser's IndexedDB and never leave the device.
 - Crop and rotate an upload for each screen. The original file is kept; the crop is saved as settings per screen, and GIFs keep playing.
 
-`firmware/` holds an ESP-IDF app for the board that shows a picture or GIF on its screen. See [firmware/README.md](firmware/README.md) for how to build and flash it.
+`firmware/` holds an ESP-IDF app that shows a picture or GIF on either screen (2.8-inch ESP32-2432S028R, or the 1.9-inch ST7789 on an ESP32 DevKit). See [firmware/README.md](firmware/README.md) for how to build and flash it.
 
 ## Install
 

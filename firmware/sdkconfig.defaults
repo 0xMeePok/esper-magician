@@ -1,4 +1,5 @@
-# The ESP32-2432S028R has an ESP32-WROOM-32 with 4 MB of flash.
+# Both boards (ESP32-2432S028R, and the ESP32 DevKit for the 1.9-inch screen)
+# have a classic ESP32 with 4 MB of flash.
 CONFIG_IDF_TARGET="esp32"
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
