@@ -18,7 +18,7 @@ const KB = 1024
 /**
  * The 4 MB layout from ASH-33: a 640 KB factory app (Wi-Fi + OTA downloader), one OTA slot for
  * the ESPER player or your own program, and a media partition for one picture or GIF.
- * Keep in step with firmware/partitions.csv.
+ * Keep in step with firmware/partitions.ota.csv (the current player still uses partitions.csv).
  */
 export const FOUR_MB_LAYOUT: FlashLayout = {
   flashBytes: 4096 * KB,

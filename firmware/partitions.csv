@@ -1,7 +1,4 @@
-# ESPER-MAGICIAN 4 MB flash map (ASH-33). Keep in step with src/flashLayout.ts.
-# Name,  Type, SubType, Offset,   Size
-nvs,     data, nvs,     0x9000,   0x5000
-otadata, data, ota,     0xe000,   0x2000
-factory, app,  factory, 0x10000,  0xA0000
-ota_0,   app,  ota_0,   0xB0000,  0x180000
-media,   data, 0x40,    0x230000, 0x1D0000
+# Name,   Type, SubType, Offset,   Size,  Flags
+nvs,      data, nvs,     0x9000,   0x6000,
+phy_init, data, phy,     0xf000,   0x1000,
+factory,  app,  factory, 0x10000,  0x3F0000,

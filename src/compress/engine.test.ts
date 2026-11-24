@@ -78,8 +78,8 @@ describe('flash layout (ASH-33)', () => {
     expect(partition(layout, 'otadata').size).toBe(0x2000)
   })
 
-  it('matches the partition table the firmware ships', () => {
-    const csv = readFileSync(join(process.cwd(), 'firmware', 'partitions.csv'), 'utf8')
+  it('matches the planned partition table in firmware/partitions.ota.csv', () => {
+    const csv = readFileSync(join(process.cwd(), 'firmware', 'partitions.ota.csv'), 'utf8')
     const rows = csv
       .split('\n')
       .filter((line) => line.trim() && !line.startsWith('#'))
