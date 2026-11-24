@@ -40,7 +40,16 @@ export type CurrentUpload = {
 /** What ASH-19 flashes for a screen. Null when there is nothing to flash yet. */
 export type ScreenAsset =
   | { kind: 'example'; id: string }
-  | { kind: 'upload'; name: string; type: string; blob: Blob; compressed: StrengthId | null }
+  | {
+      kind: 'upload'
+      name: string
+      type: string
+      blob: Blob
+      compressed: StrengthId | null
+      /** For an original that still has to be made for the screen. */
+      animated: boolean
+      crop: ScreenCrop | null
+    }
 
 /** The compressed copy for a screen, if it was made with that screen's current crop. */
 export function activeChoice(
@@ -371,13 +380,14 @@ export function useScreenContent() {
     }
     const showing = viewport.status === 'content' && current && viewport.src === current.url
     if (!showing || !current) return null
+    const crop = current.crops[screenId] ?? null
+    const base = { kind: 'upload', name: current.name, animated: current.animated, crop } as const
     if (!needsCompression(current, screenId)) {
-      const type = current.file.type
-      return { kind: 'upload', name: current.name, type, blob: current.file, compressed: null }
+      return { ...base, type: current.file.type, blob: current.file, compressed: null }
     }
     const choice = activeChoice(current, screenId)
     if (!choice) return null
-    return { kind: 'upload', name: current.name, type: choice.type, blob: choice.blob, compressed: choice.strength }
+    return { ...base, type: choice.type, blob: choice.blob, compressed: choice.strength }
   }
 
   const canCrop =

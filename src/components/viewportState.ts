@@ -7,7 +7,7 @@ export const BEZEL_RADIUS = 12
 export const BEZEL_WIDTH = VIEWPORT_WIDTH + BEZEL_FRAME * 2
 
 export const VIEWPORT_LABEL = 'Screen preview'
-export const SCREEN_CAPTION = 'Your screen (320 \u00d7 240)'
+export const SCREEN_CAPTION = 'Your screen (170 \u00d7 320)'
 export const EMPTY_MESSAGE = 'Nothing on the screen yet.'
 export const EMPTY_HELPER = 'Pick an example or upload a picture.'
 export const EMPTY_HELPER_WITH_UPLOADS =

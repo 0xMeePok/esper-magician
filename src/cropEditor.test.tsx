@@ -151,7 +151,7 @@ describe('Crop button (ASH-29)', () => {
 })
 
 describe('crop editor (ASH-29)', () => {
-  it('rotates, crops, previews, applies per screen, and persists with the saved upload', async () => {
+  it('rotates, crops, previews, applies, and persists with the saved upload', async () => {
     const container = await mountApp()
     await choose(container, new File([bytes], 'beach.png', { type: 'image/png' }))
 
@@ -159,15 +159,15 @@ describe('crop editor (ASH-29)', () => {
     const editor = dialog()
     expect(editor?.getAttribute('aria-modal')).toBe('true')
     const title = editor?.querySelector('h2')
-    expect(title?.textContent).toBe('Crop for 2.8-inch screen')
+    expect(title?.textContent).toBe('Crop for 1.9-inch screen')
     expect(editor?.getAttribute('aria-labelledby')).toBe(title?.id)
     expect(document.activeElement).toBe(title)
-    expect(editor?.textContent).toContain('Shape locked to your screen (4:3)')
+    expect(editor?.textContent).toContain('Shape locked to your screen (170 × 320)')
     expect(document.querySelector('.page')?.hasAttribute('inert')).toBe(true)
     expect(editor?.textContent).not.toContain(EDITOR_COPY.gifCaption)
 
     const preview = editor?.querySelector('.crop-dialog__preview .viewport')
-    expect(preview?.getAttribute('style')).toContain('width: 320px')
+    expect(preview?.getAttribute('style')).toContain('width: 170px')
     expect(preview?.getAttribute('data-framing')).toBe('cropped')
 
     await click(buttonNamed(EDITOR_COPY.rotateRightLabel, editor!))
@@ -194,32 +194,21 @@ describe('crop editor (ASH-29)', () => {
       'rotate(90deg)',
     )
     expect(container.textContent).toContain(CROPPED_CAPTION)
-    expect(container.textContent).toContain('Crop applied for the 2.8-inch screen.')
+    expect(container.textContent).toContain('Crop applied for the 1.9-inch screen.')
     await settle()
     const [saved] = (await storedCrops()) as Array<Record<string, { rotationDeg: number }>>
-    expect(saved?.['2.8']?.rotationDeg).toBe(90)
-    expect(saved?.['1.9']).toBeUndefined()
+    expect(saved?.['1.9']?.rotationDeg).toBe(90)
 
-    // The other screen keeps the default framing.
-    await click(container.querySelector('input[value="1.9"]'))
-    expect(pageViewport()?.getAttribute('data-framing')).toBe('contain')
-    expect(container.textContent).not.toContain(CROPPED_CAPTION)
-
-    // Cancel (Esc) on the 1.9-inch screen changes nothing.
+    // Cancel (Esc) changes nothing.
     await click(cropButton())
-    expect(dialog()?.querySelector('h2')?.textContent).toBe('Crop for 1.9-inch screen')
-    expect(dialog()?.textContent).toContain('Shape locked to your screen (170 × 320)')
-    expect(dialog()?.querySelector('.crop-dialog__preview .viewport')?.getAttribute('style')).toContain(
-      'width: 170px',
-    )
     await click(buttonNamed(EDITOR_COPY.rotateLeftLabel, dialog()!))
     await key(dialog(), 'Escape')
     expect(dialog()).toBeNull()
     expect(document.activeElement).toBe(cropButton())
-    expect(pageViewport()?.getAttribute('data-framing')).toBe('contain')
-
-    await click(container.querySelector('input[value="2.8"]'))
     expect(pageViewport()?.getAttribute('data-framing')).toBe('cropped')
+    expect(pageViewport()?.querySelector('.viewport__cropped')?.getAttribute('style')).toContain(
+      'rotate(90deg)',
+    )
     expect(container.textContent).toContain(CROPPED_CAPTION)
 
     // Another upload starts uncropped; picking the saved one brings its crop back.
@@ -241,7 +230,7 @@ describe('crop editor (ASH-29)', () => {
     await click(buttonNamed(EDITOR_COPY.apply, dialog()!))
     expect(pageViewport()?.getAttribute('data-framing')).toBe('contain')
     expect(again.textContent).not.toContain(CROPPED_CAPTION)
-    expect(again.textContent).toContain('Crop removed for the 2.8-inch screen.')
+    expect(again.textContent).toContain('Crop removed for the 1.9-inch screen.')
     await settle()
     const remaining = await storedCrops()
     expect(remaining).toHaveLength(2)
@@ -288,7 +277,7 @@ describe('crop editor (ASH-29)', () => {
     await act(async () => {
       root?.render(
         <CropEditor
-          screen={screenFor('2.8')}
+          screen={screenFor('1.9')}
           media={{ url: 'blob:broken', name: 'x.png', animated: false, source: { width: 10, height: 10 } }}
           saved={null}
           decoded={false}

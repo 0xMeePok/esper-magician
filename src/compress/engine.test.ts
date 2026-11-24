@@ -23,7 +23,8 @@ import { compressGif, gifFrames, playbackDelay } from './gif.ts'
 import { compressStill, DEVICE_JPEG_OPTIONS } from './still.ts'
 import { STRENGTHS } from './strengths.ts'
 
-const wide = screenFor('2.8')
+/** A landscape size, to check the transforms both ways round. */
+const wide = { width: 320, height: 240 }
 const tall = screenFor('1.9')
 
 /** Quadrants: red top-left, green top-right, blue bottom-left, yellow bottom-right. */
@@ -95,7 +96,7 @@ describe('flash layout (ASH-33)', () => {
   it.each([
     ['factory app off', PLAYER_ONLY_LAYOUT],
     ['factory app on', FACTORY_LAYOUT],
-  ])('tiles 4 MB exactly with 64 KB-aligned apps and a 384 KB player (%s)', (_, layout) => {
+  ])('tiles 4 MB exactly with 64 KB-aligned apps and an 896 KB player (%s)', (_, layout) => {
     const parts = layout.partitions
     for (let i = 1; i < parts.length; i++) {
       expect(parts[i]!.offset).toBe(parts[i - 1]!.offset + parts[i - 1]!.size)
@@ -104,13 +105,12 @@ describe('flash layout (ASH-33)', () => {
     expect(parts.at(-1)!.offset + parts.at(-1)!.size).toBe(layout.flashBytes)
     for (const app of parts.filter((part) => part.type === 'app')) expect(app.offset % 0x10000).toBe(0)
     expect(parts.filter((part) => part.type === 'app').at(-1)!.size).toBe(PLAYER_APP_BYTES)
-    expect(PLAYER_APP_BYTES).toBe(384 * 1024)
+    expect(PLAYER_APP_BYTES).toBe(896 * 1024)
   })
 
   it('has no factory app unless the flag is on', () => {
     expect(FACTORY_APP_ENABLED).toBe(false)
     expect(flashLayout()).toBe(PLAYER_ONLY_LAYOUT)
-    expect(FLASH_LAYOUTS['2.8']).toBe(PLAYER_ONLY_LAYOUT)
     expect(FLASH_LAYOUTS['1.9']).toBe(PLAYER_ONLY_LAYOUT)
     expect(PLAYER_ONLY_LAYOUT.partitions.map((part) => part.name)).toEqual(['nvs', 'player', 'media'])
     expect(partition(PLAYER_ONLY_LAYOUT, 'player')).toMatchObject({ offset: 0x10000, subtype: 'factory' })
@@ -125,13 +125,12 @@ describe('flash layout (ASH-33)', () => {
     expect(readCsv('partitions.factory.csv')).toEqual(FACTORY_LAYOUT.partitions)
   })
 
-  it('leaves 3.56 MB for one picture on each screen (2.93 MB with the factory app) and formats sizes plainly', () => {
+  it('leaves 3.06 MB for one picture (2.43 MB with the factory app) and formats sizes plainly', () => {
     expect(MEDIA_HEADER_BYTES).toBe(4096)
-    expect(mediaBudget('2.8')).toBe(3_731_456)
-    expect(mediaBudget('1.9')).toBe(3_731_456)
-    expect(formatBytes(3_731_456)).toBe('3.56 MB')
-    expect(partition(FACTORY_LAYOUT, 'media').size - MEDIA_HEADER_BYTES).toBe(3_076_096)
-    expect(formatBytes(3_076_096)).toBe('2.93 MB')
+    expect(mediaBudget('1.9')).toBe(3_207_168)
+    expect(formatBytes(3_207_168)).toBe('3.06 MB')
+    expect(partition(FACTORY_LAYOUT, 'media').size - MEDIA_HEADER_BYTES).toBe(2_551_808)
+    expect(formatBytes(2_551_808)).toBe('2.43 MB')
     expect(formatBytes(1_896_448)).toBe('1.81 MB')
     expect(formatBytes(4_214_393)).toBe('4.02 MB')
     expect(formatBytes(640 * 1024)).toBe('640 KB')

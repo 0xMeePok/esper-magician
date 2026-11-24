@@ -73,7 +73,7 @@ function imageFile(name: string, type: string) {
 function renderPair(selectedId: string | null, state: ViewportState) {
   return renderToStaticMarkup(
     <>
-      <BoardScreen screen={screenFor('2.8')} state={state} />
+      <BoardScreen screen={screenFor('1.9')} state={state} />
       <ExamplesSection selectedId={selectedId} onSelect={() => {}} />
     </>,
   )
@@ -127,7 +127,7 @@ describe('photo frame example', () => {
     expect(loading).toContain('aria-checked="true"')
 
     const shown = renderPair('photo-frame', published[1]!.state)
-    const landscape = screenFor('2.8')
+    const landscape = screenFor('1.9')
     const portrait = screenFor('1.9')
     const tall = renderToStaticMarkup(
       <BoardScreen screen={portrait} state={published[1]!.state} />,

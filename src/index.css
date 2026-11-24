@@ -50,10 +50,6 @@ html {
   html {
     overflow-x: auto;
   }
-
-  .screen-picker {
-    min-width: calc(320px + (var(--bezel-frame) * 2));
-  }
 }
 
 body {
@@ -172,107 +168,10 @@ input {
   padding: 16px;
 }
 
-.panel h2,
-.screen-picker-label {
+.panel h2 {
   font-size: 18px;
   line-height: 24px;
   font-weight: 600;
-}
-
-.screen-picker {
-  width: 100%;
-  max-width: var(--picker-width);
-}
-
-.screen-picker-label {
-  margin-bottom: var(--space-2);
-}
-
-.screen-options {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.screen-option {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  min-height: 64px;
-  padding: 8px 16px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-control);
-  cursor: pointer;
-}
-
-.screen-option:has(:checked) {
-  background: var(--color-selected);
-}
-
-.screen-option:has(:checked)::before {
-  content: '';
-  position: absolute;
-  top: -1px;
-  bottom: -1px;
-  left: -1px;
-  width: 3px;
-  background: var(--color-accent);
-  border-radius: var(--radius-control) 0 0 var(--radius-control);
-}
-
-.screen-option:has(:focus-visible) {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-}
-
-.screen-option-input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-  border: 0;
-}
-
-.screen-option-input:focus,
-.screen-option-input:focus-visible {
-  outline: none;
-}
-
-.screen-glyph {
-  flex: 0 0 24px;
-  width: 24px;
-  height: 24px;
-  color: var(--color-secondary);
-}
-
-.screen-option:has(:checked) .screen-glyph {
-  color: var(--color-accent);
-}
-
-.screen-option-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.screen-option-title {
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 500;
-  color: var(--color-ink);
-}
-
-.screen-option-caption {
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 400;
-  color: var(--color-secondary);
 }
 
 .screen-radio {
@@ -283,11 +182,6 @@ input {
   box-sizing: border-box;
   border: 2px solid var(--color-radio);
   border-radius: 50%;
-}
-
-.screen-option:has(:checked) .screen-radio {
-  border-color: var(--color-accent);
-  background: radial-gradient(circle, var(--color-accent) 0 4px, transparent 4.5px);
 }
 
 .example-options {

@@ -60,7 +60,7 @@ describe('upload records', () => {
     const cropped: UploadRecord = {
       ...record('beach.png', 3),
       crops: {
-        '2.8': { rotationDeg: 90, cropRect: { x: 10, y: 20, width: 400, height: 300 } },
+        '1.9': { rotationDeg: 90, cropRect: { x: 10, y: 20, width: 400, height: 300 } },
       },
     }
     await saveUpload(cropped)

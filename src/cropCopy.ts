@@ -23,9 +23,7 @@ export function editorTitle(screen: Screen): string {
 }
 
 export function lockedShapeLabel(screen: Screen): string {
-  return screen.id === '2.8'
-    ? 'Shape locked to your screen (4:3)'
-    : `Shape locked to your screen (${screen.width} \u00d7 ${screen.height})`
+  return `Shape locked to your screen (${screen.width} \u00d7 ${screen.height})`
 }
 
 export function rotatedAnnouncement(rotation: number): string {

@@ -1,46 +1,28 @@
 menu "ESPER screen"
 
-    choice ESPER_BOARD
-        prompt "Which screen is this for?"
-        default ESPER_BOARD_CYD_2_8
-        help
-            The pins for each board are in main/board_cyd.h and
-            main/board_devkit_st7789.h.
-
-        config ESPER_BOARD_CYD_2_8
-            bool "2.8-inch ESP32-2432S028R (Cheap Yellow Display, 320x240)"
-
-        config ESPER_BOARD_DEVKIT_1_9
-            bool "1.9-inch ST7789 (170x320) on an ESP32 DevKit"
-    endchoice
-
     config ESPER_SCREEN_PIXEL_CLOCK_MHZ
         int "SPI clock for the screen (MHz)"
         range 10 80
         default 40
         help
-            40 MHz works on most boards. Drop to 20 if the picture is
+            40 MHz works on most screens. Drop to 20 if the picture is
             noisy or garbled.
 
     config ESPER_SCREEN_BGR
         bool "Screen uses BGR colour order"
-        default y if ESPER_BOARD_CYD_2_8
         default n
         help
             Flip this if the red and blue bars on the test card are swapped.
 
     config ESPER_SCREEN_INVERT_COLORS
         bool "Invert colours"
-        default y if ESPER_BOARD_DEVKIT_1_9
-        default n
+        default y
         help
             Flip this if the picture looks like a photo negative. Most
-            1.9-inch IPS screens need it on. Some newer "2 USB" 2.8-inch
-            boards need it on too.
+            1.9-inch IPS screens need it on.
 
     config ESPER_SCREEN_MIRROR_X
         bool "Mirror the picture left to right"
-        default y if ESPER_BOARD_CYD_2_8
         default n
 
     config ESPER_SCREEN_MIRROR_Y
