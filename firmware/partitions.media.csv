@@ -1,0 +1,8 @@
+# 4 MB flash map with the factory app OFF (the default for now, ASH-19).
+# The player boots straight from 0x10000 in a 384 KB slot, and the rest is pictures.
+# Not used by the current player yet: it still builds with partitions.csv (one big app).
+# Keep in step with PLAYER_ONLY_LAYOUT in src/flashLayout.ts.
+# Name,  Type, SubType, Offset,   Size
+nvs,     data, nvs,     0x9000,   0x7000
+player,  app,  factory, 0x10000,  0x60000
+media,   data, 0x40,    0x70000,  0x390000

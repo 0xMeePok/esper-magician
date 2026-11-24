@@ -135,32 +135,32 @@ describe('compression panel (ASH-34)', () => {
 
     await choose(container, bigFile(BUDGET + 1, 'over.png'))
     expect(panel()?.querySelector('h2')?.textContent).toBe(COMPRESSION_COPY.heading)
-    expect(panel()?.textContent).toContain('Your screen has room for 1.81 MB. Pick how much to shrink it.')
+    expect(panel()?.textContent).toContain('Your screen has room for 3.56 MB. Pick how much to shrink it.')
     expect(jobs).toHaveLength(1)
     expect(jobs[0]?.screen).toEqual({ width: 320, height: 240 })
     expect(jobs[0]?.crop).toBeNull()
   })
 
   it('shows sizes, grays out strengths that still do not fit, and picks the lightest that fits', async () => {
-    setCompressor(fakeCompressor([2_000_000, 1_200_000, 600_000]))
+    setCompressor(fakeCompressor([4_000_000, 2_400_000, 1_200_000]))
     const container = await mount()
-    await choose(container, bigFile(4_000_000))
+    await choose(container, bigFile(8_000_000))
     const original = jobs[0]
 
     expect(radio('light')?.disabled).toBe(true)
-    expect(radio('light')?.closest('label')?.textContent).toContain('Still too big (1.91 MB)')
+    expect(radio('light')?.closest('label')?.textContent).toContain('Still too big (3.81 MB)')
     expect(radio('balanced')?.disabled).toBe(false)
     expect(radio('strong')?.disabled).toBe(false)
-    expect(radio('strong')?.closest('label')?.textContent).toContain('586 KB')
+    expect(radio('strong')?.closest('label')?.textContent).toContain('1.14 MB')
     expect(radio('balanced')?.checked).toBe(true)
-    expect(panel()?.textContent).toContain('Compressed (Balanced) · 1.14 MB of 1.81 MB')
-    expect(original?.file.size).toBe(4_000_000)
+    expect(panel()?.textContent).toContain('Compressed (Balanced) · 2.29 MB of 3.56 MB')
+    expect(original?.file.size).toBe(8_000_000)
   })
 
   it('says it cannot be done when even strong is too big', async () => {
-    setCompressor(fakeCompressor([3_000_000, 2_500_000, 2_000_000]))
+    setCompressor(fakeCompressor([6_000_000, 5_000_000, 4_000_000]))
     const container = await mount()
-    await choose(container, bigFile(5_000_000))
+    await choose(container, bigFile(10_000_000))
     expect(panel()?.querySelector('[role="alert"]')?.textContent).toBe(COMPRESSION_COPY.noneFit)
     expect(panel()?.querySelectorAll('input[type="radio"]')).toHaveLength(0)
     expect(panel()?.textContent).not.toContain('Pick how much to shrink it.')
@@ -187,9 +187,9 @@ describe('compression panel (ASH-34)', () => {
 
 describe('compressed preview (ASH-35)', () => {
   it('previews the chosen strength, compares with the original, and saves the choice', async () => {
-    setCompressor(fakeCompressor([1_500_000, 900_000, 400_000]))
+    setCompressor(fakeCompressor([3_000_000, 1_800_000, 800_000]))
     const container = await mount()
-    await choose(container, bigFile(3_000_000))
+    await choose(container, bigFile(6_000_000))
     const balancedOrLight = screenImage()
     expect(radio('light')?.checked).toBe(true)
     expect(balancedOrLight).toMatch(/^blob:/)
@@ -198,7 +198,7 @@ describe('compressed preview (ASH-35)', () => {
     const strong = screenImage()
     expect(radio('strong')?.checked).toBe(true)
     expect(strong).not.toBe(balancedOrLight)
-    expect(panel()?.textContent).toContain('Compressed (Strong) · 391 KB of 1.81 MB')
+    expect(panel()?.textContent).toContain('Compressed (Strong) · 781 KB of 3.56 MB')
 
     const toggle = [...(panel()?.querySelectorAll('button') ?? [])].find(
       (button) => button.textContent === COMPRESSION_COPY.showOriginal,
@@ -229,9 +229,9 @@ describe('compressed preview (ASH-35)', () => {
   })
 
   it('recompresses after a new crop and keeps a separate choice per screen', async () => {
-    setCompressor(fakeCompressor([1_500_000, 900_000, 400_000]))
+    setCompressor(fakeCompressor([3_000_000, 1_800_000, 800_000]))
     const container = await mount()
-    await choose(container, bigFile(3_000_000))
+    await choose(container, bigFile(6_000_000))
     await click(radio('balanced'))
 
     await click([...document.querySelectorAll('button')].find((button) => button.textContent === 'Crop'))
@@ -253,7 +253,7 @@ describe('compressed preview (ASH-35)', () => {
   })
 
   it('assetFor hands the flasher exactly the previewed bytes, or the original when it fits', async () => {
-    setCompressor(fakeCompressor([1_500_000, 900_000, 400_000]))
+    setCompressor(fakeCompressor([3_000_000, 1_800_000, 800_000]))
     let api: { content: ReturnType<typeof useScreenContent>; compression: ReturnType<typeof useCompression> } | null =
       null
     function Harness() {
@@ -279,12 +279,12 @@ describe('compressed preview (ASH-35)', () => {
     await settle(80)
     const asset = api!.content.assetFor('2.8')
     expect(asset).toMatchObject({ kind: 'upload', compressed: 'light', type: 'image/jpeg' })
-    expect(asset?.kind === 'upload' && asset.blob.size).toBe(1_500_000)
+    expect(asset?.kind === 'upload' && asset.blob.size).toBe(3_000_000)
 
     await act(async () => api!.compression.select('strong'))
     await settle()
     const strong = api!.content.assetFor('2.8')
-    expect(strong?.kind === 'upload' && strong.blob.size).toBe(400_000)
+    expect(strong?.kind === 'upload' && strong.blob.size).toBe(800_000)
     // The 1.9-inch screen has no compressed copy yet, so there is nothing safe to flash there.
     expect(api!.content.assetFor('1.9')).toBeNull()
   })
