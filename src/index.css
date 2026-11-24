@@ -844,3 +844,146 @@ input {
 .crop-control__helper {
   text-align: center;
 }
+
+/* Compression (ASH-34/35): under the screen, only when an upload doesn't fit. */
+.compression {
+  width: 100%;
+  max-width: calc(320px + (var(--bezel-frame) * 2));
+  margin-top: var(--space-4);
+  padding: 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+}
+
+.compression__heading {
+  margin: 0;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+}
+
+.compression__body {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--color-secondary);
+}
+
+.compression__working {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.compression__progress {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e9e7e1;
+}
+
+.compression__progress span {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+  transition: width 120ms linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compression__progress span {
+    transition: none;
+  }
+}
+
+.compression__message {
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--color-error-bg);
+  color: var(--color-danger);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.compression__options {
+  display: grid;
+  gap: var(--space-2);
+  margin: 12px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.compression__option {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.compression__option input {
+  margin: 0;
+  accent-color: var(--color-accent);
+}
+
+.compression__option:has(input:focus-visible) {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.compression__option[data-selected='true'] {
+  border-color: var(--color-accent);
+  background: #e7f3f1;
+}
+
+.compression__option[data-fits='false'] {
+  color: #6b675f;
+  background: #f4f3ef;
+  cursor: not-allowed;
+}
+
+.compression__label {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 500;
+}
+
+.compression__size {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--color-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.compression__option[data-fits='false'] .compression__size {
+  color: #6b675f;
+}
+
+.compression__readout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: 12px;
+}
+
+.compression__readout p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--color-accent);
+}
+
+.compression__readout .button {
+  min-height: 44px;
+  padding-block: 9px;
+}

@@ -1,3 +1,4 @@
+import { parseCompressedChoices, type CompressedChoices } from './compress/choice.ts'
 import { parseScreenCrops, type ScreenCrops } from './crop.ts'
 
 export type UploadRecord = {
@@ -8,6 +9,8 @@ export type UploadRecord = {
   createdAt: number
   /** Per-screen crop and rotation from the crop editor. The blob itself is never changed. */
   crops?: ScreenCrops
+  /** Per-screen compressed copy chosen in ASH-34/35. Flashed instead of the original. */
+  compressed?: CompressedChoices
 }
 
 const DB_NAME = 'esper-magician'
@@ -102,6 +105,7 @@ function parseRecord(value: unknown): UploadRecord | null {
   if (typeof record.createdAt !== 'number') return null
   if (!(record.blob instanceof Blob)) return null
   const crops = parseScreenCrops(record.crops)
+  const compressed = parseCompressedChoices(record.compressed)
   return {
     id: record.id,
     name: record.name,
@@ -109,6 +113,7 @@ function parseRecord(value: unknown): UploadRecord | null {
     blob: record.blob,
     createdAt: record.createdAt,
     ...(Object.keys(crops).length > 0 ? { crops } : {}),
+    ...(Object.keys(compressed).length > 0 ? { compressed } : {}),
   }
 }
 
