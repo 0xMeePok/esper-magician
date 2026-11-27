@@ -57,3 +57,23 @@ export function saveKnownDevice(device: KnownDevice | null) {
     // Private mode or storage off: the next update just uses USB again.
   }
 }
+
+/**
+ * The setup page on the screen links here as ?screen=http://192.168.1.23/. Remembers that screen
+ * for Wi-Fi sends and takes the parameter out of the address bar.
+ */
+export function adoptScreenFromAddress(location: Location = window.location, now = Date.now()): KnownDevice | null {
+  const url = new URL(location.href)
+  const value = url.searchParams.get('screen')
+  if (value === null) return null
+  url.searchParams.delete('screen')
+  try {
+    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash)
+  } catch {
+    // Some test environments have no history; the parameter just stays.
+  }
+  if (!isHttpUrl(value)) return null
+  const device = deviceFromUrls([`${new URL(value).origin}/`], now)
+  if (device) saveKnownDevice(device)
+  return device
+}

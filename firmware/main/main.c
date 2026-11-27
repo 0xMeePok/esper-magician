@@ -13,6 +13,7 @@
 #include "driver/gpio.h"
 #include "esp_check.h"
 #include "esp_log.h"
+#include "esp_ota_ops.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "media.h"
@@ -91,8 +92,12 @@ static bool show_stored(uint32_t *hold_ms)
 
 void app_main(void)
 {
+    // NVS only holds the Wi-Fi details. If it can't be read (full, a newer
+    // format, or left over from another flash layout), start it fresh: the
+    // setup hotspot then asks for the Wi-Fi again.
     esp_err_t err = nvs_flash_init();
-    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "settings storage unreadable (%s): starting it fresh", esp_err_to_name(err));
         ESP_ERROR_CHECK(nvs_flash_erase());
         err = nvs_flash_init();
     }
@@ -116,6 +121,14 @@ void app_main(void)
 
     ESP_ERROR_CHECK(network_start());
     ESP_ERROR_CHECK(web_start());
+
+    // Got this far, so this version works: keep it. With rollback on, a new
+    // version that crashes before here goes back to the one before.
+    esp_ota_mark_app_valid_cancel_rollback();
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    const esp_partition_t *spare = esp_ota_get_next_update_partition(NULL);
+    ESP_LOGI(TAG, "running from %s; %s is free for the next version", running ? running->label : "?",
+             spare ? spare->label : "no slot");
 
     bool showing_card = false;
     while (true) {

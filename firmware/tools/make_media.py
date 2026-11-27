@@ -2,7 +2,7 @@
 """Wraps a JPEG or GIF into a media image, the same way the website does.
 
     python tools/make_media.py picture.jpg media.bin
-    python -m esptool --chip esp32 write_flash 0xF0000 media.bin
+    python -m esptool --chip esp32 write_flash 0x1D0000 media.bin
 
 Useful for trying a picture without the website. The file must already be
 sized for the screen (170x320 or smaller), and a JPEG must be baseline.

@@ -159,3 +159,77 @@ export function checkBoardLog(log: LogLine[], expected: Expected | null): Check[
 
   return checks
 }
+
+// ---- Wi-Fi ----
+
+/** ESP-IDF log tags that are about Wi-Fi: the driver, the player's network code and setup. */
+const WIFI_TAG = /^[IWE] \(\d+\) (?:wifi|wifi_init|phy_init|network|setup|esp_netif_handlers)[:\s]/
+
+export function isWifiLine(line: LogLine): boolean {
+  return line.source === 'board' && WIFI_TAG.test(line.text)
+}
+
+/**
+ * What the screen would show about its Wi-Fi, worked out from its log, for when the screen itself
+ * is dark. Keep the patterns in step with the ESP_LOG lines in firmware/main/network.c.
+ */
+export type ScreenWifi = {
+  /** The setup hotspot, while it is on. */
+  hotspot: { name: string; url: string } | null
+  /** The home network it is joining or on. */
+  network: string | null
+  connected: boolean
+  url: string | null
+  localUrl: string | null
+  rssi: number | null
+  problem: string | null
+}
+
+export function screenWifi(log: LogLine[]): ScreenWifi | null {
+  let state: ScreenWifi | null = null
+  const fresh = (): ScreenWifi => ({
+    hotspot: null,
+    network: null,
+    connected: false,
+    url: null,
+    localUrl: null,
+    rssi: null,
+    problem: null,
+  })
+  for (const line of log) {
+    if (line.source !== 'board') continue
+    const text = line.text
+    let match: RegExpMatchArray | null
+    if (/^rst:0x|ESPER player \S+ on a/.test(text)) {
+      state = null // a restart: forget what the last run said
+    } else if ((match = text.match(/setup: hotspot on: join "(.+)" \(no password\), then open (http:\/\/\S+)/))) {
+      state = { ...(state ?? fresh()), hotspot: { name: match[1]!, url: match[2]! } }
+    } else if (/setup: hotspot off/.test(text)) {
+      state = { ...(state ?? fresh()), hotspot: null }
+    } else if (/setup: no Wi-Fi saved yet/.test(text)) {
+      state = { ...(state ?? fresh()), problem: 'No Wi-Fi saved yet.' }
+    } else if ((match = text.match(/network: joining (?:saved Wi-Fi )?"(.+)"/))) {
+      state = { ...(state ?? fresh()), network: match[1]!, connected: false, problem: null }
+    } else if ((match = text.match(/network: couldn't join "(.+?)"/))) {
+      state = { ...(state ?? fresh()), network: match[1]!, connected: false, problem: `Couldn't join “${match[1]}”. Check the name and password (2.4 GHz only).` }
+    } else if (/setup: can't reach the saved Wi-Fi/.test(text)) {
+      state = { ...(state ?? fresh()), problem: "Can't reach the saved Wi-Fi." }
+    } else if ((match = text.match(/wifi:connected with (.+?), aid/))) {
+      state = { ...(state ?? fresh()), network: match[1]!, problem: null }
+    } else if ((match = text.match(/wifi:security: .*rssi: (-?\d+)/))) {
+      state = { ...(state ?? fresh()), rssi: Number(match[1]) }
+    } else if ((match = text.match(/network: on Wi-Fi at (http:\/\/\S+) \(also (http:\/\/\S+)\)/))) {
+      state = { ...(state ?? fresh()), connected: true, url: match[1]!, localUrl: match[2]!, problem: null }
+    } else if (/wifi:state: run -> init/.test(text)) {
+      state = { ...(state ?? fresh()), connected: false, problem: 'Dropped off the Wi-Fi; trying again.' }
+    }
+  }
+  return state
+}
+
+/** Plain words for a signal level. */
+export function signalWords(rssi: number): string {
+  if (rssi >= -60) return 'strong'
+  if (rssi >= -70) return 'fair'
+  return 'weak'
+}

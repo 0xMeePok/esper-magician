@@ -43,8 +43,14 @@ export default function App() {
     source: flashSource,
     identity: () => assetIdentity(content.assetFor(screenId), content.selectedId),
   })
+  // A new pick clears the last send's "Done" or error: it was about something else.
+  const selectionKey = selected ? `${selected.item}|${selected.version}` : (current?.url ?? asset?.kind ?? 'none')
+  const { dismiss: dismissFlash } = flash
+  useEffect(() => {
+    dismissFlash()
+  }, [selectionKey, dismissFlash])
 
-  /** What "Put it on my screen" sends, worked out at the moment it is clicked. */
+  /** What a send puts on the screen, worked out at the moment it is clicked. */
   async function flashSource(): Promise<FlashSource> {
     const now = content.assetFor(screenId)
     if (!now) throw new Error(FLASH_COPY.nothing)
@@ -120,8 +126,10 @@ export default function App() {
               usbAvailable={flash.usbAvailable}
               board={flash.board}
               onChooseBoard={flash.chooseBoard}
-              onStart={flash.start}
+              onStartWifi={flash.startWifi}
               onStartUsb={flash.startUsb}
+              onStartScreenPage={flash.startScreenPage}
+              onDismiss={flash.dismiss}
               onSubmitWifi={(ssid, password) => void flash.submitWifi(ssid, password)}
               onSkipWifi={flash.skipWifi}
             />
@@ -134,6 +142,8 @@ export default function App() {
                 onWatch={flash.watchSerial}
                 onRestart={flash.restartScreen}
                 onStop={flash.stopSerial}
+                knownUrl={flash.device?.url ?? null}
+                onUseScreen={flash.useScreen}
               />
             ) : null}
           </div>

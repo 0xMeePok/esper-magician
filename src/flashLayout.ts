@@ -17,21 +17,25 @@ export type FlashLayout = {
 const KB = 1024
 
 /**
- * Room for the ESPER player program: 896 KB. The player draws pictures and receives new ones over
- * Wi-Fi, and is about 772 KB, so this leaves about 14% spare. Everything after it goes to pictures.
+ * Room for one copy of the ESPER player program: 896 KB. The player draws pictures, receives new
+ * ones over Wi-Fi and runs the setup hotspot, and is about 850 KB.
  */
 export const PLAYER_APP_BYTES = 896 * KB
 
 /**
- * Default 4 MB layout, factory app off: the player boots straight from 0x10000, and everything
- * after it is media. Keep in step with firmware/partitions.media.csv.
+ * Default 4 MB layout, factory app off: two slots for the player, so a new version can be written
+ * into the spare one while the current one runs (otadata says which to start, and a version that
+ * doesn't start properly rolls back). Everything after them is media.
+ * Keep in step with firmware/partitions.media.csv.
  */
-export const PLAYER_ONLY_LAYOUT: FlashLayout = {
+export const PLAYER_LAYOUT: FlashLayout = {
   flashBytes: 4096 * KB,
   partitions: [
-    { name: 'nvs', type: 'data', subtype: 'nvs', offset: 0x9000, size: 0x7000 },
-    { name: 'player', type: 'app', subtype: 'factory', offset: 0x10000, size: PLAYER_APP_BYTES },
-    { name: 'media', type: 'data', subtype: '0x40', offset: 0xf0000, size: 0x310000 },
+    { name: 'nvs', type: 'data', subtype: 'nvs', offset: 0x9000, size: 0x5000 },
+    { name: 'otadata', type: 'data', subtype: 'ota', offset: 0xe000, size: 0x2000 },
+    { name: 'ota_0', type: 'app', subtype: 'ota_0', offset: 0x10000, size: PLAYER_APP_BYTES },
+    { name: 'ota_1', type: 'app', subtype: 'ota_1', offset: 0xf0000, size: PLAYER_APP_BYTES },
+    { name: 'media', type: 'data', subtype: '0x40', offset: 0x1d0000, size: 0x230000 },
   ],
 }
 
@@ -52,7 +56,7 @@ export const FACTORY_LAYOUT: FlashLayout = {
 
 /** The layout the ESPER screen (an ESP32 DevKit with 4 MB of flash) is flashed with. */
 export function flashLayout(factoryApp: boolean = FACTORY_APP_ENABLED): FlashLayout {
-  return factoryApp ? FACTORY_LAYOUT : PLAYER_ONLY_LAYOUT
+  return factoryApp ? FACTORY_LAYOUT : PLAYER_LAYOUT
 }
 
 /** The screen's board, with the factory app flag as built. */

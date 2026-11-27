@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- No icon, so the browser doesn't ask for /favicon.ico and log a 404 on the screen. -->
+<link rel="icon" href="data:,">
 <title>ESPER screen</title>
 <style>
   body { font: 16px/1.5 system-ui, sans-serif; margin: 0; display: grid; place-items: center;
@@ -19,9 +21,11 @@
   <progress id="bar" max="1" value="0" hidden></progress>
 </main>
 <script>
-// Served by the screen itself. The website (on https) opens this page in a
-// small window and hands it the picture with postMessage; this page then sends
-// it to the screen on the same Wi-Fi. Keep in step with src/flash/wireless.ts.
+// Served by the screen itself. The website sends pictures straight from its
+// own page where the browser allows it (web.c answers CORS). Where it doesn't,
+// the website opens this page in a small window and hands it the picture with
+// postMessage; this page then sends it to the screen on the same Wi-Fi. Keep
+// in step with src/flash/wifi.ts, and allowed() with allowed_origin() in web.c.
 (function () {
   var SITE = 'https://esper-magician.vercel.app';
   var status = document.getElementById('status');

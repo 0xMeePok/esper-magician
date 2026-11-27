@@ -3,10 +3,14 @@ import { UsbError } from './usb.ts'
 import { WifiError } from './wifi.ts'
 
 export const FLASH_COPY = {
-  button: 'Put it on my screen',
+  sendWifi: 'Send over Wi-Fi',
+  sendUsb: 'Send over USB',
   helperUsb: 'Plug your screen in with a USB cable. The first time, Chrome asks you to pick it.',
-  helperWifi: 'Sends over Wi-Fi to your screen.',
-  useUsb: 'Use USB instead',
+  helperWifi: 'Wi-Fi sends straight from this page. USB installs everything, for the first time or if Wi-Fi isn’t working.',
+  wifiNeedsSetup: 'Wi-Fi works after your first send over USB.',
+  dismiss: 'Dismiss',
+  screenPage: 'Send through the screen’s page instead',
+  screenPageHelper: 'Opens a small window served by your screen, for browsers that can’t reach it from this page.',
   needsChrome:
     'Setting up your screen the first time needs Chrome or Edge on a computer, with the screen plugged in by USB. After that, changes go over Wi-Fi.',
   nothing: 'Pick an example or upload a picture first.',
@@ -42,6 +46,17 @@ export const FLASH_COPY = {
   serialRestart: 'Restart screen',
   serialStop: 'Stop',
   serialListening: 'Listening to your screen…',
+  serialViewLabel: 'Which lines to show',
+  serialViewWifi: 'Wi-Fi lines',
+  serialViewAll: 'Everything',
+  serialNoWifiLines: 'No Wi-Fi lines yet. Pick “Everything” to see the rest.',
+  screenWouldShow: 'What your screen would show',
+  wifiWaiting: 'Waiting for Wi-Fi messages from your screen…',
+  setupMode: 'Set-up mode: your screen has its own Wi-Fi network.',
+  setupNoInternet:
+    "That network has no internet, so this site won't load while you're on it. Switch back to your home Wi-Fi when the setup page says it's done.",
+  useThisScreen: 'Send to this screen over Wi-Fi',
+  screenInUse: 'Wi-Fi sends go to this screen.',
 } as const
 
 export type FlashProblem =
@@ -72,7 +87,7 @@ const MESSAGES: Record<FlashProblem, string> = {
     "What's in your screen's memory doesn't match what was sent, so the install didn't take. Try again; if it keeps happening, try another USB cable.",
   'no-board': FLASH_COPY.pickBoard,
   unreachable:
-    "Couldn't reach your screen over Wi-Fi. Check it's switched on and on the same Wi-Fi as this computer, or plug it in with USB.",
+    "Couldn't reach your screen over Wi-Fi. Check it's switched on and on the same Wi-Fi as this computer. In Chrome or Edge, allow this site to reach devices on your local network when asked.",
   'other-screen': "The screen at that address isn't a 1.9-inch ESPER screen. Set it up again with USB.",
   failed: "The picture didn't reach your screen. Try again.",
 }
@@ -91,9 +106,4 @@ export function problemFor(error: unknown): { problem: FlashProblem; detail?: st
     return { problem: error.problem }
   }
   return { problem: 'failed', detail: error instanceof Error ? error.message : undefined }
-}
-
-/** Wi-Fi problems are fixed by setting the screen up again over USB. */
-export function suggestsUsb(problem: FlashProblem): boolean {
-  return problem === 'unreachable' || problem === 'other-screen' || problem === 'failed'
 }

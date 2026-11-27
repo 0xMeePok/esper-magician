@@ -1,9 +1,9 @@
 {
   "name": "ESPER player",
-  "version": "1.1.1",
+  "version": "1.3.0",
   "screen": "1.9",
   "board": "devkit-30",
-  "mediaOffset": 983040,
+  "mediaOffset": 1900544,
   "new_install_prompt_erase": false,
   "builds": [
     {
@@ -12,20 +12,26 @@
         {
           "path": "bootloader.bin",
           "offset": 4096,
-          "size": 26112,
-          "sha256": "64f3e62718b0fa10752a8e98d0a64b3dd5e7a7e8a7e4a8bb248af2917a91caa5"
+          "size": 26192,
+          "sha256": "b9dfbce9063402f0ec9ff54ecfd2f7e997a98921b330c14155d4e242aca3b0eb"
         },
         {
           "path": "partition-table.bin",
           "offset": 32768,
           "size": 3072,
-          "sha256": "a6e0626b55a7ec54f8cc2b469793b18c03baca9169cbc95c1220dc1e610a5076"
+          "sha256": "1feb824ad96874b2f758511312bf4617f5b8ee6927374af5a8ceae3199e691cc"
+        },
+        {
+          "path": "ota_data_initial.bin",
+          "offset": 57344,
+          "size": 8192,
+          "sha256": "7d2c7ac4888bfd75cd5f56e8d61f69595121183afc81556c876732fd3782c62f"
         },
         {
           "path": "esper_player.bin",
           "offset": 65536,
-          "size": 791232,
-          "sha256": "f0fcb35dc29555aed8a64aaa392717dbf233bb110b04b5f1bfe18207fd308b57"
+          "size": 866608,
+          "sha256": "400e9bf9a98611d18ce062a8692c8ed70da595699484b2f821630714c485ef59"
         }
       ]
     }

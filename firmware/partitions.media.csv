@@ -1,8 +1,12 @@
 # 4 MB flash map for the ESPER screen, factory app OFF (the default).
-# The player (with Wi-Fi, about 772 KB) boots straight from 0x10000 in an
-# 896 KB slot, and the rest is for the picture.
-# Keep in step with PLAYER_ONLY_LAYOUT in src/flashLayout.ts.
+# Two 896 KB slots for the player (about 800 KB), so a new version can be
+# written into the spare one while the current one keeps running; otadata says
+# which to start. With rollback on, a new version that doesn't start properly
+# goes back to the old one. The rest is for the picture.
+# Keep in step with PLAYER_LAYOUT in src/flashLayout.ts.
 # Name,  Type, SubType, Offset,   Size
-nvs,     data, nvs,     0x9000,   0x7000
-player,  app,  factory, 0x10000,  0xE0000
-media,   data, 0x40,    0xF0000,  0x310000
+nvs,     data, nvs,     0x9000,   0x5000
+otadata, data, ota,     0xE000,   0x2000
+ota_0,   app,  ota_0,   0x10000,  0xE0000
+ota_1,   app,  ota_1,   0xF0000,  0xE0000
+media,   data, 0x40,    0x1D0000, 0x230000

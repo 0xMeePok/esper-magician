@@ -41,6 +41,7 @@ type Fakes = {
   joinWifi?: (ssid: string, password: string) => Promise<string[]>
   write?: FlashDriver['writeOverUsb']
   sendOverWifi?: FlashDriver['sendOverWifi']
+  sendInPage?: FlashDriver['sendInPage']
   /** What the fake screen prints once its port is opened, as a real one would. */
   boardOutput?: (sent: { crc32: number; length: number } | null) => string
 }
@@ -62,7 +63,7 @@ function fakeDriver(fakes: Fakes = {}): FlashDriver {
     loadFirmware: async (board) => {
       record('loadFirmware', board)
       return {
-        manifest: { name: 'ESPER player', version: '1.1.0', board, mediaOffset: 0xf0000, builds: [{ chipFamily: 'ESP32', parts: [] }] },
+        manifest: { name: 'ESPER player', version: '1.1.0', board, mediaOffset: 0x1d0000, builds: [{ chipFamily: 'ESP32', parts: [] }] },
         chipFamily: 'ESP32',
         parts: [
           { data: new Uint8Array(10), address: 0x1000 },
@@ -105,6 +106,11 @@ function fakeDriver(fakes: Fakes = {}): FlashDriver {
       record('openWindow')
       return { closed: false, close: () => record('closeWindow') } as unknown as Window
     },
+    sendInPage:
+      fakes.sendInPage ??
+      (async (device, image, screen) => {
+        record('sendInPage', device, image, screen)
+      }),
     sendOverWifi:
       fakes.sendOverWifi ??
       (async (_popup, device, image, screen, onProgress) => {
@@ -178,9 +184,12 @@ async function type(input: Element | null, value: string) {
   })
 }
 
-function flashButton() {
-  return [...document.querySelectorAll('button')].find((button) => button.textContent === FLASH_COPY.button)
+function button(label: string) {
+  return [...document.querySelectorAll('button')].find((element) => element.textContent === label)
 }
+
+const usbButton = () => button(FLASH_COPY.sendUsb)
+const wifiButton = () => button(FLASH_COPY.sendWifi)
 
 function flashText() {
   return document.querySelector('section.flash')?.textContent ?? ''
@@ -190,15 +199,16 @@ describe('put it on my screen (ASH-19)', () => {
   it('waits for something to send, and never offers the clock', async () => {
     setFlashDriver(fakeDriver())
     const container = await mount()
-    expect(flashButton()?.getAttribute('aria-disabled')).toBe('true')
+    expect(usbButton()?.getAttribute('aria-disabled')).toBe('true')
+    expect(wifiButton()?.getAttribute('aria-disabled')).toBe('true')
     expect(flashText()).toContain(FLASH_COPY.nothing)
 
     const clock = [...container.querySelectorAll('[role="radio"]')].find((row) => row.textContent?.includes('Digital clock'))
     await click(clock)
     await settle()
-    expect(flashButton()?.getAttribute('aria-disabled')).toBe('true')
+    expect(usbButton()?.getAttribute('aria-disabled')).toBe('true')
     expect(flashText()).toContain(FLASH_COPY.clock)
-    await click(flashButton())
+    await click(usbButton())
     expect(calls.choosePort).toBeUndefined()
   })
 
@@ -206,10 +216,13 @@ describe('put it on my screen (ASH-19)', () => {
     setFlashDriver(fakeDriver())
     const container = await mount()
     await upload(container)
-    expect(flashButton()?.getAttribute('aria-disabled')).toBeNull()
+    expect(usbButton()?.getAttribute('aria-disabled')).toBeNull()
+    // Wi-Fi needs the screen's address, which the first USB install gives.
+    expect(wifiButton()?.getAttribute('aria-disabled')).toBe('true')
     expect(flashText()).toContain(FLASH_COPY.helperUsb)
+    expect(flashText()).toContain(FLASH_COPY.wifiNeedsSetup)
 
-    await click(flashButton())
+    await click(usbButton())
     await settle(60)
     expect(calls.choosePort).toHaveLength(1)
 
@@ -218,9 +231,9 @@ describe('put it on my screen (ASH-19)', () => {
     expect(source).toMatchObject({ kind: 'convert', animated: false, crop: null })
     expect(screen).toMatchObject({ width: 170, height: 320 })
 
-    // Bootloader, partition table, player, then the picture at the media partition.
+    // Bootloader, partition table, player, then the picture at the media partition (after both player slots).
     const [, parts] = calls.write![0]! as [SerialPort, Array<{ data: Uint8Array; address: number }>]
-    expect(parts.map((part) => part.address)).toEqual([0x1000, 0x8000, 0x10000, 0xf0000])
+    expect(parts.map((part) => part.address)).toEqual([0x1000, 0x8000, 0x10000, 0x1d0000])
     expect(readMediaHeader(parts[3]!.data)).toMatchObject({ kind: 'jpeg', screen: { width: 170, height: 320 }, length: JPEG.length })
 
     // The player has no Wi-Fi yet: ask for it.
@@ -241,59 +254,73 @@ describe('put it on my screen (ASH-19)', () => {
     expect(flashText()).toContain(FLASH_COPY.doneWifi)
     expect(readKnownDevice()).toMatchObject({ url: URLS[0], localUrl: URLS[1] })
     expect(flashText()).toContain(FLASH_COPY.helperWifi)
+    expect(wifiButton()?.getAttribute('aria-disabled')).toBeNull()
   })
 
-  it('sends over Wi-Fi once the screen is known, with no device list', async () => {
+  it('sends over Wi-Fi from this page, with no window or device list', async () => {
     localStorage.setItem(DEVICE_STORAGE_KEY, JSON.stringify({ url: URLS[0], localUrl: URLS[1], savedAt: 1 }))
     setFlashDriver(fakeDriver())
     const container = await mount()
     await upload(container)
     expect(flashText()).toContain(FLASH_COPY.helperWifi)
-    await click(flashButton())
+    await click(wifiButton())
     await settle()
     expect(calls.choosePort).toBeUndefined()
-    expect(calls.openWindow).toHaveLength(1)
-    const [device, image] = calls.sendOverWifi![0]! as [unknown, Uint8Array]
+    expect(calls.openWindow).toBeUndefined()
+    const [device, image] = calls.sendInPage![0]! as [unknown, Uint8Array]
     expect(device).toMatchObject({ url: URLS[0] })
     expect(readMediaHeader(image)).toMatchObject({ kind: 'jpeg', length: JPEG.length })
     expect(flashText()).toContain(FLASH_COPY.done)
     expect(flashText()).toContain(FLASH_COPY.doneWifi)
+
+    // The ✕ clears it.
+    await click(document.querySelector(`.flash__status button[aria-label="${FLASH_COPY.dismiss}"]`))
+    expect(flashText()).not.toContain(FLASH_COPY.done)
   })
 
-  it('offers USB when the screen cannot be reached over Wi-Fi', async () => {
+  it('clears "Done" when another item is picked', async () => {
+    localStorage.setItem(DEVICE_STORAGE_KEY, JSON.stringify({ url: URLS[0], localUrl: null, savedAt: 1 }))
+    setFlashDriver(fakeDriver())
+    const container = await mount()
+    await upload(container)
+    await click(wifiButton())
+    await settle()
+    expect(flashText()).toContain(FLASH_COPY.done)
+
+    const photo = [...container.querySelectorAll('[role="radio"]')].find((row) => row.textContent?.includes('Photo frame'))
+    await click(photo)
+    await settle()
+    expect(flashText()).not.toContain(FLASH_COPY.done)
+  })
+
+  it("offers the screen's own page when this page can't reach it", async () => {
     localStorage.setItem(DEVICE_STORAGE_KEY, JSON.stringify({ url: URLS[0], localUrl: null, savedAt: 1 }))
     setFlashDriver(
       fakeDriver({
-        waitForPlayer: async () => URLS,
-        sendOverWifi: async () => {
+        sendInPage: async () => {
           throw new WifiError('unreachable')
         },
       }),
     )
     const container = await mount()
     await upload(container)
-    await click(flashButton())
+    await click(wifiButton())
     await settle()
     expect(document.querySelector('[role="alert"]')?.textContent).toMatch(/Couldn't reach your screen over Wi-Fi/)
-    expect(calls.closeWindow).toHaveLength(1)
+    expect(calls.openWindow).toBeUndefined()
 
-    const useUsb = [...document.querySelectorAll('.flash__status button')].find(
-      (button) => button.textContent === FLASH_COPY.useUsb,
-    )
-    await click(useUsb)
-    await settle(60)
-    expect(calls.choosePort).toHaveLength(1)
-    expect(calls.write).toHaveLength(1)
-    // The player was already on the Wi-Fi: no form, and its address is refreshed.
-    expect(document.querySelector('form.flash__wifi')).toBeNull()
-    expect(flashText()).toContain(FLASH_COPY.doneWifi)
+    await click(button(FLASH_COPY.screenPage))
+    await settle()
+    expect(calls.openWindow).toHaveLength(1)
+    expect(calls.sendOverWifi).toHaveLength(1)
+    expect(flashText()).toContain(FLASH_COPY.done)
   })
 
   it('says plainly what went wrong over USB, and goes quiet if the device list is closed', async () => {
     setFlashDriver(fakeDriver({ port: null }))
     const container = await mount()
     await upload(container)
-    await click(flashButton())
+    await click(usbButton())
     await settle()
     expect(calls.prepare).toBeUndefined()
     expect(document.querySelector('[role="alert"]')).toBeNull()
@@ -305,7 +332,7 @@ describe('put it on my screen (ASH-19)', () => {
         },
       }),
     )
-    await click(flashButton())
+    await click(usbButton())
     await settle()
     expect(document.querySelector('[role="alert"]')?.textContent).toMatch(/Another app is using/)
   })
@@ -314,7 +341,8 @@ describe('put it on my screen (ASH-19)', () => {
     setFlashDriver(fakeDriver({ usb: false }))
     const container = await mount()
     await upload(container)
-    expect(flashButton()?.getAttribute('aria-disabled')).toBe('true')
+    expect(usbButton()?.getAttribute('aria-disabled')).toBe('true')
+    expect(wifiButton()?.getAttribute('aria-disabled')).toBe('true')
     expect(flashText()).toContain(FLASH_COPY.needsChrome)
 
     act(() => root?.unmount())
@@ -322,8 +350,8 @@ describe('put it on my screen (ASH-19)', () => {
     localStorage.setItem(DEVICE_STORAGE_KEY, JSON.stringify({ url: URLS[0], localUrl: null, savedAt: 1 }))
     const again = await mount()
     await upload(again)
-    expect(flashButton()?.getAttribute('aria-disabled')).toBeNull()
-    expect(flashText()).not.toContain(FLASH_COPY.useUsb)
+    expect(wifiButton()?.getAttribute('aria-disabled')).toBeNull()
+    expect(usbButton()?.getAttribute('aria-disabled')).toBe('true')
   })
 
   it('asks which board the screen is wired to, and installs the firmware built for it', async () => {
@@ -331,16 +359,16 @@ describe('put it on my screen (ASH-19)', () => {
     setFlashDriver(fakeDriver())
     const container = await mount()
     await upload(container)
-    expect(flashButton()?.getAttribute('aria-disabled')).toBe('true')
+    expect(usbButton()?.getAttribute('aria-disabled')).toBe('true')
     expect(flashText()).toContain(FLASH_COPY.pickBoard)
-    await click(flashButton())
+    await click(usbButton())
     expect(calls.choosePort).toBeUndefined()
 
     const thirtyPin = container.querySelector('input[name="esper-board"][value="devkit-30"]')
     await click(thirtyPin)
     expect(localStorage.getItem(BOARD_STORAGE_KEY)).toBe('devkit-30')
-    expect(flashButton()?.getAttribute('aria-disabled')).toBeNull()
-    await click(flashButton())
+    expect(usbButton()?.getAttribute('aria-disabled')).toBeNull()
+    await click(usbButton())
     await settle(60)
     expect(calls.loadFirmware).toEqual([['devkit-30']])
   })
@@ -362,10 +390,12 @@ describe('put it on my screen (ASH-19)', () => {
     )
     const container = await mount()
     await upload(container)
-    await click(flashButton())
+    await click(usbButton())
     await settle(60)
     expect(calls.openImprov![0]![1]).toBe(true) // restarted, so the whole boot log is read
 
+    // Wi-Fi lines are shown first; everything is one click away.
+    await click(document.querySelector('input[name="serial-view"][value="all"]'))
     const log = document.querySelector('.serial__log')?.textContent ?? ''
     expect(log).toContain('[esptool] Chip is ESP32-D0WD-V3')
     expect(log).toContain('rst:0x1 (POWERON_RESET)')
@@ -386,7 +416,7 @@ describe('put it on my screen (ASH-19)', () => {
     )
     const container = await mount()
     await upload(container)
-    await click(flashButton())
+    await click(usbButton())
     await settle(60)
     const bad = document.querySelector('.serial__check--bad')?.textContent
     expect(bad).toContain('Built for devkit-38, not devkit-30')
@@ -403,7 +433,7 @@ describe('put it on my screen (ASH-19)', () => {
     expect(tile()).toBe('cat.png, picture, Selected')
     expect(container.querySelector('.upload-scrim--selected')?.textContent).toBe('Selected')
 
-    await click(flashButton())
+    await click(usbButton())
     await settle(60)
     expect(tile()).toBe('cat.png, picture, On the screen')
     expect(container.querySelector('.upload-scrim--selected')).toBeNull()
@@ -411,9 +441,51 @@ describe('put it on my screen (ASH-19)', () => {
     // The board now reports a picture this browser didn't send: nothing is marked.
     report = () => 'I (520) media: JPEG, 99 bytes, CRC 0xdeadbeef OK\r\n'
     await click([...document.querySelectorAll('button')].find((button) => button.textContent === FLASH_COPY.wifiSkip))
-    await click(flashButton())
+    await click(usbButton())
     await settle(60)
     expect(tile()).toBe('cat.png, picture, Selected')
     expect(container.textContent).not.toContain('On the screen')
+  })
+
+  it("shows the screen's Wi-Fi when the screen is dark, and sends to it over Wi-Fi on request", async () => {
+    setFlashDriver(
+      fakeDriver({
+        boardOutput: () =>
+          [
+            'I (631) esper: ESPER player 1.3.0 on a 170x320 screen',
+            'I (640) setup: no Wi-Fi saved yet',
+            'I (650) setup: hotspot on: join "ESPER-49F5C0" (no password), then open http://192.168.4.1/',
+            'I (650) media: GIF, 58005 bytes, CRC 0xa7f3673f OK',
+            'I (9000) network: joining "penstamp"',
+            'I (9121) wifi:connected with penstamp, aid = 1, channel 11, BW20, bssid = 20:e1:5d:6e:81:08',
+            'I (9121) wifi:security: WPA2-PSK, phy: bgn, rssi: -51, cipher(pairwise:0x3, group:0x3), pmf:0',
+            'I (9671) network: on Wi-Fi at http://192.168.0.16/ (also http://esper-49f5c0.local/)',
+            '',
+          ].join('\r\n'),
+      }),
+    )
+    const container = await mount()
+    await upload(container)
+    await click(usbButton())
+    await settle(60)
+
+    const card = () => document.querySelector('.serial__screen')?.textContent ?? ''
+    expect(card()).toContain('ESPER-49F5C0')
+    expect(card()).toContain('On Wi-Fi penstamp · signal strong (-51 dBm)')
+    expect(card()).toContain('http://192.168.0.16/')
+
+    // The Wi-Fi view leaves out everything that isn't about Wi-Fi.
+    const log = document.querySelector('.serial__log')?.textContent ?? ''
+    expect(log).toContain('setup: hotspot on')
+    expect(log).toContain('wifi:connected with penstamp')
+    expect(log).not.toContain('media: GIF')
+    expect(log).not.toContain('[esptool]')
+
+    localStorage.removeItem(DEVICE_STORAGE_KEY)
+    await click(button(FLASH_COPY.useThisScreen))
+    expect(readKnownDevice()).toMatchObject({ url: 'http://192.168.0.16/', localUrl: 'http://esper-49f5c0.local/' })
+    expect(card()).toContain(FLASH_COPY.screenInUse)
+    await click(button(FLASH_COPY.wifiSkip)) // the Improv Wi-Fi form isn't needed: it's already on
+    expect(wifiButton()?.getAttribute('aria-disabled')).toBeNull()
   })
 })

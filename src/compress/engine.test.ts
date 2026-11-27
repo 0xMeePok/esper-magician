@@ -15,7 +15,7 @@ import {
   mediaBudget,
   partition,
   PLAYER_APP_BYTES,
-  PLAYER_ONLY_LAYOUT,
+  PLAYER_LAYOUT,
 } from '../flashLayout.ts'
 import { screenFor } from '../screens.ts'
 import { BACKGROUND, cropKey, flatten, targetSize, transformFrame, type Frame } from './frames.ts'
@@ -94,7 +94,7 @@ function readCsv(name: string) {
 
 describe('flash layout (ASH-33)', () => {
   it.each([
-    ['factory app off', PLAYER_ONLY_LAYOUT],
+    ['factory app off', PLAYER_LAYOUT],
     ['factory app on', FACTORY_LAYOUT],
   ])('tiles 4 MB exactly with 64 KB-aligned apps and an 896 KB player (%s)', (_, layout) => {
     const parts = layout.partitions
@@ -110,10 +110,12 @@ describe('flash layout (ASH-33)', () => {
 
   it('has no factory app unless the flag is on', () => {
     expect(FACTORY_APP_ENABLED).toBe(false)
-    expect(flashLayout()).toBe(PLAYER_ONLY_LAYOUT)
-    expect(FLASH_LAYOUTS['1.9']).toBe(PLAYER_ONLY_LAYOUT)
-    expect(PLAYER_ONLY_LAYOUT.partitions.map((part) => part.name)).toEqual(['nvs', 'player', 'media'])
-    expect(partition(PLAYER_ONLY_LAYOUT, 'player')).toMatchObject({ offset: 0x10000, subtype: 'factory' })
+    expect(flashLayout()).toBe(PLAYER_LAYOUT)
+    expect(FLASH_LAYOUTS['1.9']).toBe(PLAYER_LAYOUT)
+    // Two player slots, so a new version can be written while the current one runs.
+    expect(PLAYER_LAYOUT.partitions.map((part) => part.name)).toEqual(['nvs', 'otadata', 'ota_0', 'ota_1', 'media'])
+    expect(partition(PLAYER_LAYOUT, 'ota_0')).toMatchObject({ offset: 0x10000, size: PLAYER_APP_BYTES })
+    expect(partition(PLAYER_LAYOUT, 'ota_1')).toMatchObject({ offset: 0xf0000, size: PLAYER_APP_BYTES })
 
     expect(flashLayout(true)).toBe(FACTORY_LAYOUT)
     expect(partition(FACTORY_LAYOUT, 'factory')).toMatchObject({ offset: 0x10000, size: 640 * 1024 })
@@ -121,13 +123,14 @@ describe('flash layout (ASH-33)', () => {
   })
 
   it('matches the partition tables in firmware/', () => {
-    expect(readCsv('partitions.media.csv')).toEqual(PLAYER_ONLY_LAYOUT.partitions)
+    expect(readCsv('partitions.media.csv')).toEqual(PLAYER_LAYOUT.partitions)
     expect(readCsv('partitions.factory.csv')).toEqual(FACTORY_LAYOUT.partitions)
   })
 
-  it('leaves 3.06 MB for one picture (2.43 MB with the factory app) and formats sizes plainly', () => {
+  it('leaves 2.18 MB for one picture (2.43 MB with the factory app) and formats sizes plainly', () => {
     expect(MEDIA_HEADER_BYTES).toBe(4096)
-    expect(mediaBudget('1.9')).toBe(3_207_168)
+    expect(mediaBudget('1.9')).toBe(2_289_664)
+    expect(formatBytes(2_289_664)).toBe('2.18 MB')
     expect(formatBytes(3_207_168)).toBe('3.06 MB')
     expect(partition(FACTORY_LAYOUT, 'media').size - MEDIA_HEADER_BYTES).toBe(2_551_808)
     expect(formatBytes(2_551_808)).toBe('2.43 MB')

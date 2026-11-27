@@ -16,7 +16,7 @@
 #define W 170
 #define H 320
 #define BACKGROUND 0x2945
-#define CAPACITY 0x310000
+#define CAPACITY 0x230000 // the media partition in partitions.media.csv
 
 typedef struct {
     const uint8_t *data;

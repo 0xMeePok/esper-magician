@@ -82,3 +82,55 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+
+.serial__screen {
+  display: grid;
+  gap: 6px;
+  padding: 12px 16px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+}
+
+.serial__screen h4,
+.serial__screen p {
+  margin: 0;
+}
+
+.serial__screen code {
+  font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+.serial__hotspot {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: var(--radius-control);
+  background: #fdf6dc;
+  border: 1px solid #e0a800;
+}
+
+.serial__ssid {
+  overflow-wrap: anywhere;
+}
+
+.serial__screen .button {
+  justify-self: start;
+}
+
+.serial__views {
+  display: flex;
+  gap: 16px;
+}
+
+.serial__view {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  cursor: pointer;
+}
+
+.serial__view input {
+  accent-color: var(--color-accent);
+}

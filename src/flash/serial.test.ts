@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { parseManifest } from './firmware.ts'
 import { encodeRpc, ImprovParser } from './improv.ts'
 import { md5Hex } from './md5.ts'
-import { checkBoardLog, LineBuffer } from './serialLog.ts'
+import { checkBoardLog, LineBuffer, screenWifi } from './serialLog.ts'
 
 const text = (value: string) => new TextEncoder().encode(value)
 const decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
@@ -107,5 +107,35 @@ describe('parseManifest', () => {
   it('refuses firmware built for the other board', () => {
     expect(() => parseManifest(manifest, 'devkit-30')).toThrow(/wrong one/)
     expect(parseManifest(manifest, 'devkit-38').board).toBe('devkit-38')
+  })
+})
+
+describe('screenWifi', () => {
+  const board = (line: string) => ({ source: 'board' as const, text: line })
+
+  it('follows the hotspot, a failed join and a restart', () => {
+    const lines = [
+      board('I (650) setup: hotspot on: join "ESPER-49F5C0" (no password), then open http://192.168.4.1/'),
+      board('I (9000) network: joining "penstamp"'),
+      board('W (39000) network: couldn\'t join "penstamp": check the name and password (2.4 GHz only)'),
+    ]
+    expect(screenWifi(lines)).toMatchObject({
+      hotspot: { name: 'ESPER-49F5C0', url: 'http://192.168.4.1/' },
+      network: 'penstamp',
+      connected: false,
+    })
+    expect(screenWifi(lines)?.problem).toMatch(/Couldn't join “penstamp”/)
+
+    const later = [...lines, board('I (99000) setup: hotspot off')]
+    expect(screenWifi(later)?.hotspot).toBeNull()
+    expect(screenWifi([...later, board('rst:0x1 (POWERON_RESET),boot:0x17 (SPI_FAST_FLASH_BOOT)')])).toBeNull()
+  })
+
+  it('notices a drop', () => {
+    const lines = [
+      board('I (5671) network: on Wi-Fi at http://192.168.0.16/ (also http://esper-49f5c0.local/)'),
+      board('I (33111) wifi:state: run -> init (0x22c0)'),
+    ]
+    expect(screenWifi(lines)).toMatchObject({ connected: false, url: 'http://192.168.0.16/' })
   })
 })

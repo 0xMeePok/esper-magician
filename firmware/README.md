@@ -15,9 +15,17 @@ one over Wi-Fi:
 
 - The **first time**, the website installs everything over USB, then gives the
   screen your Wi-Fi details with [Improv Serial](https://www.improv-wifi.com/serial/).
-- **After that**, the website opens a small page the screen serves on your
-  Wi-Fi (`main/receiver.html`) and hands it the picture. The screen saves it to
-  its `media` partition and shows it straight away.
+  Or, with no USB: a screen with no Wi-Fi saved (or one it can't reach for a
+  while) opens a **setup hotspot** called `ESPER-XXXXXX`, with no password. Join
+  it on a phone or computer and a setup page opens (or go to
+  `http://192.168.4.1/`); pick your Wi-Fi and type the password. The page then
+  links to the website with the screen's address, and the hotspot turns off 90
+  seconds later.
+- **After that**, the website posts the picture to `POST /media` on your
+  Wi-Fi, straight from its own page (`web.c` answers CORS for the website's
+  addresses only). Browsers that won't allow that get a small page the screen
+  serves (`main/receiver.html`), which the website hands the picture to. The
+  screen saves it to its `media` partition and shows it straight away.
 
 Before anything has been sent, or if what's stored is damaged, the screen shows
 a colour test card. The button (GPIO 33, or 16 on the 30-pin board) switches between the picture and the
@@ -60,9 +68,19 @@ From `partitions.media.csv`, which `src/flashLayout.ts` on the website follows:
 | --- | --- | --- | --- |
 | bootloader | 0x1000 | 26 KB | ESP-IDF bootloader |
 | partition table | 0x8000 | 3 KB | |
-| nvs | 0x9000 | 28 KB | Wi-Fi details |
-| player | 0x10000 | 896 KB | this app (about 772 KB) |
-| media | 0xF0000 | 3,136 KB | a 4 KB header, then the JPEG or GIF (up to 3.06 MB) |
+| nvs | 0x9000 | 20 KB | Wi-Fi details |
+| otadata | 0xE000 | 8 KB | which player slot to start |
+| ota_0 | 0x10000 | 896 KB | the player (about 850 KB) |
+| ota_1 | 0xF0000 | 896 KB | room for the next player version |
+| media | 0x1D0000 | 2,240 KB | a 4 KB header, then the JPEG or GIF (up to 2.18 MB) |
+
+There are two player slots so a new version can be written into the spare one
+while the current one keeps running. With rollback on
+(`CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE`), a new version that crashes before it
+has started Wi-Fi and the web server goes back to the one before. A USB install
+always writes slot `ota_0` and resets `otadata`. Installing over Wi-Fi isn't
+built yet: it needs signed firmware, so nobody else on the Wi-Fi can install
+their own.
 
 The media header is described in `main/media_format.h`; the website writes it
 in `src/flash/mediaImage.ts`. The player checks the CRC of the whole picture
@@ -81,10 +99,12 @@ main/
 ├── media.c          the media partition: check, draw, receive
 ├── media_format.c   the header and CRC-32 (plain C, tested on a computer)
 ├── gif_decoder.c    streaming GIF decoder (plain C, tested on a computer)
-├── network.c        Wi-Fi station, mDNS name esper-xxxxxx.local, Improv over USB
+├── network.c        Wi-Fi station, setup hotspot, mDNS name esper-xxxxxx.local, Improv over USB
+├── dns.c            answers every name with the screen while the setup hotspot is on
+├── setup.html       the setup hotspot's page: pick a network, type the password
 ├── improv.c         Improv Serial (plain C, tested on a computer)
-├── web.c            GET /, GET /info, POST /media
-├── receiver.html    the page the website opens to hand over a picture
+├── web.c            GET /, GET /info, POST /media, CORS for the website
+├── receiver.html    the fallback page the website opens to hand over a picture
 └── test_card.c      the colour test card
 ```
 
@@ -114,7 +134,7 @@ as a baseline JPEG or a GIF, then:
 
 ```bash
 python tools/make_media.py picture.jpg media.bin
-python -m esptool --chip esp32 write_flash 0xF0000 media.bin
+python -m esptool --chip esp32 write_flash 0x1D0000 media.bin
 ```
 
 ## Update the copy the website installs

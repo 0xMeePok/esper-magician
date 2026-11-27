@@ -10,14 +10,15 @@ import { packMediaImage, readMediaHeader } from './mediaImage.ts'
 import { readOnScreen, reconcileOnScreen, saveOnScreen, type OnScreen } from './onScreen.ts'
 import { LineBuffer, MAX_LOG_LINES, reportedPicture, type Expected, type LogLine } from './serialLog.ts'
 import { choosePort, hasWebSerial, ImprovLink, writeOverUsb, type LinkOptions } from './usb.ts'
-import { openScreenWindow, sendOverWifi } from './wifi.ts'
+import { openScreenWindow, sendInPage, sendOverWifi } from './wifi.ts'
 
 export type FlashRoute = 'usb' | 'wifi'
 
 export type FlashState =
   | { phase: 'idle' }
   | { phase: 'preparing'; route: FlashRoute }
-  | { phase: 'sending'; route: FlashRoute; fraction: number }
+  /** `fraction` is null when the browser can't report progress (Wi-Fi from this page). */
+  | { phase: 'sending'; route: FlashRoute; fraction: number | null }
   | { phase: 'restarting' }
   | { phase: 'wifi-setup'; failed: boolean }
   | { phase: 'joining' }
@@ -34,6 +35,7 @@ export type FlashDriver = {
     port: SerialPort,
     options: LinkOptions,
   ) => Promise<Pick<ImprovLink, 'waitForPlayer' | 'joinWifi' | 'restart' | 'close'>>
+  sendInPage: typeof sendInPage
   openScreenWindow: typeof openScreenWindow
   sendOverWifi: typeof sendOverWifi
   prepareDeviceAsset: typeof prepareDeviceAsset
@@ -45,6 +47,7 @@ export const browserDriver: FlashDriver = {
   loadFirmware,
   writeOverUsb,
   openImprov: (port, options) => ImprovLink.open(port, options),
+  sendInPage,
   openScreenWindow,
   sendOverWifi,
   prepareDeviceAsset,
@@ -243,8 +246,26 @@ export function useFlash({ screen, budget, source, identity }: Options) {
     await link.current?.restart().catch(() => {})
   }
 
-  /** Every time after: hand the picture to the screen's own page on the Wi-Fi. */
+  /** Every time after: send straight to the screen on the Wi-Fi, from this page. */
   async function sendWirelessly(known: KnownDevice) {
+    const driver = activeDriver
+    setState({ phase: 'preparing', route: 'wifi' })
+    try {
+      const image = await prepareImage(driver)
+      setState({ phase: 'sending', route: 'wifi', fraction: null })
+      await driver.sendInPage(known, image, screen)
+      markSent()
+      setState({ phase: 'done', route: 'wifi', wifi: true })
+    } catch (error) {
+      fail('wifi', error)
+    }
+  }
+
+  /**
+   * For browsers that won't let this page reach the screen: hand the picture to the screen's own
+   * page in a small window. Opens a window, so it must run straight from a click.
+   */
+  async function sendThroughScreenPage(known: KnownDevice) {
     const driver = activeDriver
     let popup: Window
     try {
@@ -268,24 +289,33 @@ export function useFlash({ screen, budget, source, identity }: Options) {
     }
   }
 
-  // Both start functions open a device list or a window, so they must run straight from a click.
-  function start() {
+  function run(task: () => Promise<void>) {
     if (running.current) return
     running.current = true
-    const known = readKnownDevice()
-    const task = known ? sendWirelessly(known) : sendOverUsb()
-    void task.finally(() => {
+    void task().finally(() => {
       running.current = false
     })
   }
 
-  function startUsb() {
-    if (running.current) return
-    running.current = true
-    void sendOverUsb().finally(() => {
-      running.current = false
-    })
+  function startWifi() {
+    const known = readKnownDevice()
+    if (known) run(() => sendWirelessly(known))
   }
+
+  // Opens a device list, so it must run straight from a click.
+  function startUsb() {
+    run(sendOverUsb)
+  }
+
+  function startScreenPage() {
+    const known = readKnownDevice()
+    if (known) run(() => sendThroughScreenPage(known))
+  }
+
+  /** Clears a finished or failed send's message. */
+  const dismiss = useCallback(() => {
+    setState((current) => (current.phase === 'done' || current.phase === 'error' ? { phase: 'idle' } : current))
+  }, [])
 
   async function submitWifi(ssid: string, password: string) {
     const open = link.current
@@ -314,10 +344,14 @@ export function useFlash({ screen, budget, source, identity }: Options) {
     monitoring,
     onScreen,
     usbAvailable: activeDriver.hasWebSerial(),
-    start,
+    startWifi,
     startUsb,
+    startScreenPage,
+    dismiss,
     submitWifi,
     skipWifi,
+    /** Sends over Wi-Fi go to the screen at these addresses (from its log). */
+    useScreen: (url: string, localUrl: string | null) => void remember([url, ...(localUrl ? [localUrl] : [])]),
     watchSerial: () => void watchSerial(),
     restartScreen: () => void restartScreen(),
     stopSerial: () => void closeLink(),

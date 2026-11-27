@@ -1,12 +1,12 @@
 import { useId, useState, type FormEvent } from 'react'
 import { boards, type BoardId } from '../boards.ts'
-import { FLASH_COPY, problemMessage, suggestsUsb } from '../flash/copy.ts'
+import { FLASH_COPY, problemMessage } from '../flash/copy.ts'
 import { busy, type FlashState } from '../flash/useFlash.ts'
 import './flash-panel.css'
 
 type FlashPanelProps = {
   state: FlashState
-  /** Why the button can't be used right now, or null when it can. */
+  /** Why nothing can be sent right now, or null when it can. */
   blocked: string | null
   /** True once this browser knows the screen's Wi-Fi address. */
   wireless: boolean
@@ -15,8 +15,11 @@ type FlashPanelProps = {
   /** The board picked for USB installs, or null before one is picked. */
   board: BoardId | null
   onChooseBoard: (id: BoardId) => void
-  onStart: () => void
+  onStartWifi: () => void
   onStartUsb: () => void
+  /** The small-window route, for browsers that can't reach the screen from this page. */
+  onStartScreenPage: () => void
+  onDismiss: () => void
   onSubmitWifi: (ssid: string, password: string) => void
   onSkipWifi: () => void
 }
@@ -29,42 +32,62 @@ export default function FlashPanel(props: FlashPanelProps) {
   const { state, blocked, wireless, usbAvailable } = props
   const helperId = useId()
   const working = busy(state)
-  const needsUsbFirst = !wireless && !usbAvailable
-  const needsBoard = !wireless && usbAvailable && props.board === null
-  const disabled = working || blocked !== null || needsUsbFirst || needsBoard || state.phase === 'wifi-setup'
+  const held = working || blocked !== null || state.phase === 'wifi-setup'
+  const wifiDisabled = held || !wireless
+  const usbDisabled = held || !usbAvailable || props.board === null
 
   let helper: string = wireless ? FLASH_COPY.helperWifi : FLASH_COPY.helperUsb
   if (blocked) helper = blocked
-  else if (needsUsbFirst) helper = FLASH_COPY.needsChrome
-  else if (needsBoard) helper = FLASH_COPY.pickBoard
+  else if (!usbAvailable) helper = wireless ? FLASH_COPY.helperWifi : FLASH_COPY.needsChrome
+  else if (props.board === null) helper = wireless ? `${FLASH_COPY.helperWifi} ${FLASH_COPY.pickBoard}` : FLASH_COPY.pickBoard
+  else if (!wireless) helper = `${FLASH_COPY.helperUsb} ${FLASH_COPY.wifiNeedsSetup}`
 
   return (
     <section className="flash" aria-label="Put it on your screen">
       {usbAvailable ? <BoardPicker board={props.board} disabled={working} onChoose={props.onChooseBoard} /> : null}
-      <button
-        type="button"
-        className="button button-primary flash__button"
-        aria-describedby={helperId}
-        aria-disabled={disabled || undefined}
-        onClick={() => {
-          if (!disabled) props.onStart()
-        }}
-      >
-        {FLASH_COPY.button}
-      </button>
+      <div className="flash__buttons">
+        <SendButton label={FLASH_COPY.sendWifi} disabled={wifiDisabled} describedBy={helperId} onClick={props.onStartWifi} />
+        <SendButton label={FLASH_COPY.sendUsb} disabled={usbDisabled} describedBy={helperId} onClick={props.onStartUsb} />
+      </div>
       <p id={helperId} className="helper flash__helper">
         {helper}
-        {wireless && usbAvailable && !blocked && !working ? (
-          <>
-            {' '}
-            <button type="button" className="link-button" onClick={props.onStartUsb}>
-              {FLASH_COPY.useUsb}
-            </button>
-          </>
-        ) : null}
       </p>
       <FlashStatus {...props} />
     </section>
+  )
+}
+
+function SendButton({
+  label,
+  disabled,
+  describedBy,
+  onClick,
+}: {
+  label: string
+  disabled: boolean
+  describedBy: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      className="button button-primary flash__button"
+      aria-describedby={describedBy}
+      aria-disabled={disabled || undefined}
+      onClick={() => {
+        if (!disabled) onClick()
+      }}
+    >
+      {label}
+    </button>
+  )
+}
+
+function DismissButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" className="flash__dismiss" aria-label={FLASH_COPY.dismiss} title={FLASH_COPY.dismiss} onClick={onClick}>
+      ×
+    </button>
   )
 }
 
@@ -103,7 +126,7 @@ function BoardPicker({
   )
 }
 
-function FlashStatus({ state, usbAvailable, onStartUsb, onSubmitWifi, onSkipWifi }: FlashPanelProps) {
+function FlashStatus({ state, onStartScreenPage, onDismiss, onSubmitWifi, onSkipWifi }: FlashPanelProps) {
   switch (state.phase) {
     case 'idle':
       return <p className="visually-hidden" aria-live="polite" />
@@ -121,6 +144,15 @@ function FlashStatus({ state, usbAvailable, onStartUsb, onSubmitWifi, onSkipWifi
     }
     case 'sending': {
       const text = state.route === 'usb' ? FLASH_COPY.installing : FLASH_COPY.sendingWifi
+      if (state.fraction === null) {
+        // No progress to show: the screen draws its own bar while the picture arrives.
+        return (
+          <div className="flash__status" aria-live="polite">
+            <p>{text}</p>
+            <div className="flash__bar flash__bar--busy" role="progressbar" aria-label={text} />
+          </div>
+        )
+      }
       const value = percent(state.fraction)
       return (
         <div className="flash__status" aria-live="polite">
@@ -144,21 +176,26 @@ function FlashStatus({ state, usbAvailable, onStartUsb, onSubmitWifi, onSkipWifi
       return <WifiForm failed={state.failed} onSubmit={onSubmitWifi} onSkip={onSkipWifi} />
     case 'done':
       return (
-        <div className="flash__status flash__status--done" aria-live="polite">
+        <div className="flash__status flash__status--done flash__status--dismissable" aria-live="polite">
+          <DismissButton onClick={onDismiss} />
           <p>{FLASH_COPY.done}</p>
           <p className="helper">{state.wifi ? FLASH_COPY.doneWifi : FLASH_COPY.doneNoWifi}</p>
         </div>
       )
     case 'error':
       return (
-        <div className="flash__status" aria-live="assertive">
+        <div className="flash__status flash__status--dismissable" aria-live="assertive">
+          <DismissButton onClick={onDismiss} />
           <p className="board-error" role="alert">
             {problemMessage(state.problem, state.detail)}
           </p>
-          {state.route === 'wifi' && suggestsUsb(state.problem) && usbAvailable ? (
-            <button type="button" className="button button-file" onClick={onStartUsb}>
-              {FLASH_COPY.useUsb}
-            </button>
+          {state.route === 'wifi' && state.problem === 'unreachable' ? (
+            <>
+              <button type="button" className="button button-file" onClick={onStartScreenPage}>
+                {FLASH_COPY.screenPage}
+              </button>
+              <p className="helper">{FLASH_COPY.screenPageHelper}</p>
+            </>
           ) : null}
         </div>
       )

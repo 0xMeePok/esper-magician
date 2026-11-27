@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Set up your ESPER screen</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; margin: 0; background: #f6f5f1; color: #111; }
+  main { max-width: 24rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+  h1 { font-size: 1.3rem; margin: 0 0 0.25rem; }
+  p { margin: 0.5rem 0; }
+  .helper { color: #555; font-size: 0.9rem; }
+  label { display: grid; gap: 0.25rem; margin: 1rem 0 0; font-weight: 600; }
+  select, input, button { font: inherit; padding: 0.7rem 0.75rem; border-radius: 8px;
+                          border: 1px solid #c9c6bd; background: #fff; color: inherit; }
+  button { margin-top: 1.25rem; width: 100%; border-color: #0f766e; background: #0f766e;
+           color: #fff; font-weight: 600; }
+  button[disabled] { opacity: 0.6; }
+  .status { margin-top: 1.25rem; padding: 0.75rem 1rem; border-radius: 8px; background: #fff;
+            border: 1px solid #c9c6bd; }
+  .ok { border-color: #0f766e; background: #e7f3f1; }
+  .bad { border-color: #b42318; background: #fdecea; }
+  a { color: #0f766e; word-break: break-all; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Set up your ESPER screen</h1>
+  <p class="helper">Pick your home Wi-Fi so the screen can join it. It needs a 2.4 GHz network.</p>
+  <form id="form">
+    <label>Wi-Fi network
+      <select id="list"><option value="">Looking for networks…</option></select>
+    </label>
+    <label id="other" hidden>Network name
+      <input id="ssid" autocomplete="off" maxlength="32" autocapitalize="none">
+    </label>
+    <label>Password
+      <input id="password" type="password" maxlength="64" autocomplete="current-password">
+    </label>
+    <button id="join" type="submit">Join</button>
+  </form>
+  <div id="status" class="status" hidden></div>
+</main>
+<script>
+// Served by the screen on its setup hotspot (network.c, web.c). Text from the
+// screen goes in with textContent only: network names are chosen by whoever
+// runs them.
+(function () {
+  var SITE = 'https://esper-magician.vercel.app';
+  var list = document.getElementById('list');
+  var other = document.getElementById('other');
+  var ssid = document.getElementById('ssid');
+  var password = document.getElementById('password');
+  var join = document.getElementById('join');
+  var status = document.getElementById('status');
+  var OTHER = '\u0000other';
+
+  function option(value, text) {
+    var item = document.createElement('option');
+    item.value = value;
+    item.textContent = text;
+    return item;
+  }
+
+  function show(kind, lines, link) {
+    status.hidden = false;
+    status.className = 'status' + (kind ? ' ' + kind : '');
+    status.textContent = '';
+    lines.forEach(function (line) {
+      var p = document.createElement('p');
+      p.textContent = line;
+      status.appendChild(p);
+    });
+    if (link) {
+      var p = document.createElement('p');
+      var a = document.createElement('a');
+      a.href = link;
+      a.textContent = link;
+      p.appendChild(a);
+      status.appendChild(p);
+    }
+  }
+
+  function get(path, done) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', path);
+    xhr.timeout = 15000;
+    xhr.onload = function () {
+      var data = null;
+      try { data = JSON.parse(xhr.responseText); } catch (e) {}
+      done(data);
+    };
+    xhr.onerror = xhr.ontimeout = function () { done(null); };
+    xhr.send();
+  }
+
+  get('/scan', function (networks) {
+    list.textContent = '';
+    (networks || []).forEach(function (net) {
+      list.appendChild(option(net.ssid, net.ssid + (net.locked ? ' 🔒' : '') + '  (' + net.rssi + ' dBm)'));
+    });
+    list.appendChild(option(OTHER, 'Other network…'));
+    if (!networks || !networks.length) {
+      list.value = OTHER;
+      other.hidden = false;
+    }
+  });
+
+  list.addEventListener('change', function () {
+    other.hidden = list.value !== OTHER;
+  });
+
+  function poll() {
+    get('/status', function (s) {
+      if (!s) {
+        // Joining moves the screen's radio to your router's channel, which can
+        // drop this phone off the hotspot for a moment.
+        show('', ['Waiting for the screen… If this doesn’t change, rejoin the ESPER Wi-Fi.']);
+        return setTimeout(poll, 2000);
+      }
+      if (s.state === 'joining') {
+        show('', ['Joining ' + s.ssid + '…']);
+        return setTimeout(poll, 1000);
+      }
+      if (s.state === 'joined') {
+        var link = SITE + '/?screen=' + encodeURIComponent(s.url);
+        show('ok', [
+          'Your screen is on ' + s.ssid + ' at ' + s.url,
+          'Switch this phone or computer back to your home Wi-Fi, then open:',
+        ], link);
+        join.disabled = false;
+        return;
+      }
+      show('bad', ['Your screen couldn’t join ' + s.ssid + '. Check the name and password, and that it is a 2.4 GHz network.']);
+      join.disabled = false;
+    });
+  }
+
+  document.getElementById('form').addEventListener('submit', function (event) {
+    event.preventDefault();
+    var name = list.value === OTHER ? ssid.value.trim() : list.value;
+    if (!name) return;
+    join.disabled = true;
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/wifi');
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function () {
+      if (xhr.status === 202) return poll();
+      show('bad', ['The screen didn’t take those details. Try again.']);
+      join.disabled = false;
+    };
+    xhr.onerror = function () { setTimeout(poll, 1000); };
+    xhr.send('ssid=' + encodeURIComponent(name) + '&password=' + encodeURIComponent(password.value));
+  });
+})();
+</script>
+</body>
+</html>

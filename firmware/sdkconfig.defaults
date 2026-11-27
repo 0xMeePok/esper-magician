@@ -3,15 +3,20 @@ CONFIG_IDF_TARGET="esp32"
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
 
-# The player, then everything else for the picture (see partitions.media.csv).
+# Two player slots, then everything else for the picture (see partitions.media.csv).
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.media.csv"
 
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 CONFIG_COMPILER_OPTIMIZATION_SIZE=y
 
-# Wi-Fi: station only, on a home network.
-CONFIG_ESP_WIFI_SOFTAP_SUPPORT=n
+# A new player version that doesn't start properly goes back to the one before.
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+
+# Wi-Fi: a station on the home network, plus a setup hotspot when there isn't one.
+CONFIG_ESP_WIFI_SOFTAP_SUPPORT=y
+# Phones send long headers when they check for a sign-in page on the hotspot.
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
 CONFIG_ESP_WIFI_ENTERPRISE_SUPPORT=n
 CONFIG_LWIP_IPV6=n
 CONFIG_BT_ENABLED=n
