@@ -143,10 +143,12 @@ esp_err_t media_load(void)
         }
         s_ox = (BOARD_LCD_WIDTH - s_gif->width) / 2;
         s_oy = (BOARD_LCD_HEIGHT - s_gif->height) / 2;
+        ESP_LOGI(TAG, "GIF %dx%d at (%d,%d)", s_gif->width, s_gif->height, s_ox, s_oy);
     }
     s_loaded = true;
-    ESP_LOGI(TAG, "%s, %lu bytes", s_header.kind == MEDIA_KIND_GIF ? "GIF" : "JPEG",
-             (unsigned long)s_header.length);
+    // The website compares this CRC with the one it sent.
+    ESP_LOGI(TAG, "%s, %lu bytes, CRC 0x%08lx OK", s_header.kind == MEDIA_KIND_GIF ? "GIF" : "JPEG",
+             (unsigned long)s_header.length, (unsigned long)s_header.crc32);
     return ESP_OK;
 }
 
@@ -201,6 +203,8 @@ static esp_err_t show_jpeg(void)
         err = res == JDR_OK ? ESP_OK : ESP_ERR_INVALID_STATE;
         if (res != JDR_OK) {
             ESP_LOGW(TAG, "JPEG decode failed (%d)", res);
+        } else {
+            ESP_LOGI(TAG, "drew JPEG %ux%u at (%d,%d)", jd.width, jd.height, s_ox, s_oy);
         }
     }
     free(work);

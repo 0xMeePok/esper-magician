@@ -1,0 +1,2 @@
+# Overlay for tools/build_web.sh: the 38-pin DevKit (BLK on GPIO 32, button on GPIO 33).
+CONFIG_ESPER_BOARD_DEVKIT_38=y

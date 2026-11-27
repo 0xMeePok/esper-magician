@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App.tsx'
+import { BOARD_STORAGE_KEY } from './boards.ts'
 import { FLASH_COPY } from './flash/copy.ts'
 import { DEVICE_STORAGE_KEY, readKnownDevice } from './flash/deviceStore.ts'
 import { readMediaHeader } from './flash/mediaImage.ts'
@@ -40,7 +41,12 @@ type Fakes = {
   joinWifi?: (ssid: string, password: string) => Promise<string[]>
   write?: FlashDriver['writeOverUsb']
   sendOverWifi?: FlashDriver['sendOverWifi']
+  /** What the fake screen prints once its port is opened, as a real one would. */
+  boardOutput?: (sent: { crc32: number; length: number } | null) => string
 }
+
+/** The last picture handed to the fake flasher, read back from its header. */
+let lastSent: { crc32: number; length: number } | null = null
 
 function fakeDriver(fakes: Fakes = {}): FlashDriver {
   const record = (name: string, ...args: unknown[]) => {
@@ -53,29 +59,38 @@ function fakeDriver(fakes: Fakes = {}): FlashDriver {
       record('choosePort')
       return fakes.port === undefined ? PORT : fakes.port
     },
-    loadFirmware: async () => ({
-      manifest: { name: 'ESPER player', version: '1.0.0', chip: 'ESP32', mediaOffset: 0xf0000, parts: [] },
-      parts: [
-        { data: new Uint8Array(10), address: 0x1000 },
-        { data: new Uint8Array(3), address: 0x8000 },
-        { data: new Uint8Array(20), address: 0x10000 },
-      ],
-    }),
+    loadFirmware: async (board) => {
+      record('loadFirmware', board)
+      return {
+        manifest: { name: 'ESPER player', version: '1.1.0', board, mediaOffset: 0xf0000, builds: [{ chipFamily: 'ESP32', parts: [] }] },
+        chipFamily: 'ESP32',
+        parts: [
+          { data: new Uint8Array(10), address: 0x1000 },
+          { data: new Uint8Array(3), address: 0x8000 },
+          { data: new Uint8Array(20), address: 0x10000 },
+        ],
+      }
+    },
     prepareDeviceAsset: async (source, screen, budget) => {
       record('prepare', source, screen, budget)
       return { kind: 'jpeg', bytes: JPEG, strength: 'light' }
     },
     writeOverUsb:
       fakes.write ??
-      (async (port, parts, onProgress) => {
-        record('write', port, parts)
+      (async (port, firmware, onProgress, onLog) => {
+        record('write', port, firmware.parts)
+        const header = readMediaHeader(firmware.parts.at(-1)!.data)
+        lastSent = header && { crc32: header.crc32, length: header.length }
+        onLog?.('Chip is ESP32-D0WD-V3 (revision v3.1)\n')
         onProgress(0.5)
         await new Promise((resolve) => setTimeout(resolve, 5))
         onProgress(1)
       }),
-    openImprov: async (port) => {
-      record('openImprov', port)
+    openImprov: async (port, options) => {
+      record('openImprov', port, options.restart)
+      if (fakes.boardOutput) options.onText?.(new TextEncoder().encode(fakes.boardOutput(lastSent)))
       return {
+        restart: async () => record('restart'),
         waitForPlayer: fakes.waitForPlayer ?? (async () => []),
         joinWifi:
           fakes.joinWifi ??
@@ -103,7 +118,9 @@ beforeEach(() => {
   document.body.innerHTML = ''
   globalThis.indexedDB = new IDBFactory()
   localStorage.clear()
+  localStorage.setItem(BOARD_STORAGE_KEY, 'devkit-30')
   calls = {}
+  lastSent = null
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   vi.stubGlobal('Image', FakeImage)
 })
@@ -307,5 +324,71 @@ describe('put it on my screen (ASH-19)', () => {
     await upload(again)
     expect(flashButton()?.getAttribute('aria-disabled')).toBeNull()
     expect(flashText()).not.toContain(FLASH_COPY.useUsb)
+  })
+
+  it('asks which board the screen is wired to, and installs the firmware built for it', async () => {
+    localStorage.removeItem(BOARD_STORAGE_KEY)
+    setFlashDriver(fakeDriver())
+    const container = await mount()
+    await upload(container)
+    expect(flashButton()?.getAttribute('aria-disabled')).toBe('true')
+    expect(flashText()).toContain(FLASH_COPY.pickBoard)
+    await click(flashButton())
+    expect(calls.choosePort).toBeUndefined()
+
+    const thirtyPin = container.querySelector('input[name="esper-board"][value="devkit-30"]')
+    await click(thirtyPin)
+    expect(localStorage.getItem(BOARD_STORAGE_KEY)).toBe('devkit-30')
+    expect(flashButton()?.getAttribute('aria-disabled')).toBeNull()
+    await click(flashButton())
+    await settle(60)
+    expect(calls.loadFirmware).toEqual([['devkit-30']])
+  })
+
+  it("shows the screen's serial output and what it says about the picture", async () => {
+    setFlashDriver(
+      fakeDriver({
+        boardOutput: (sent) =>
+          [
+            'rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)',
+            '\x1b[0;32mI (412) esper: ESPER player 1.1.0 on a 170x320 screen\x1b[0m',
+            'I (413) esper: board devkit-30: 1.9-inch ST7789 on an ESP32 DevKit 30-pin, BLK GPIO 17, button GPIO 16',
+            `I (520) media: JPEG, ${sent!.length} bytes, CRC 0x${sent!.crc32.toString(16).padStart(8, '0')} OK`,
+            'I (560) media: drew JPEG 170x320 at (0,0)',
+            'I (561) esper: backlight on: showing the picture',
+            '',
+          ].join('\r\n'),
+      }),
+    )
+    const container = await mount()
+    await upload(container)
+    await click(flashButton())
+    await settle(60)
+    expect(calls.openImprov![0]![1]).toBe(true) // restarted, so the whole boot log is read
+
+    const log = document.querySelector('.serial__log')?.textContent ?? ''
+    expect(log).toContain('[esptool] Chip is ESP32-D0WD-V3')
+    expect(log).toContain('rst:0x1 (POWERON_RESET)')
+    expect(log).toContain('I (412) esper: ESPER player 1.1.0 on a 170x320 screen')
+    expect(log).not.toContain('\x1b')
+
+    const checks = [...document.querySelectorAll('.serial__check')].map((item) => [item.className, item.textContent])
+    expect(checks.every(([className]) => className!.includes('--ok'))).toBe(true)
+    expect(checks.map(([, text]) => text).join(' ')).toContain('Picture matches what this site sent')
+  })
+
+  it('flags firmware built for the other board', async () => {
+    setFlashDriver(
+      fakeDriver({
+        boardOutput: () =>
+          'I (413) esper: board devkit-38: 1.9-inch ST7789 on an ESP32 DevKit 38-pin, BLK GPIO 32, button GPIO 33\r\n',
+      }),
+    )
+    const container = await mount()
+    await upload(container)
+    await click(flashButton())
+    await settle(60)
+    const bad = document.querySelector('.serial__check--bad')?.textContent
+    expect(bad).toContain('Built for devkit-38, not devkit-30')
   })
 })

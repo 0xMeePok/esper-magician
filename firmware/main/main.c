@@ -5,8 +5,8 @@
 // page this player serves on the home network (web.c).
 //
 // Before anything has been sent, or if what's stored is damaged, the screen
-// shows a colour test card. Each press of the button on GPIO 33 switches
-// between the picture and the test card.
+// shows a colour test card. Each press of the button (GPIO 33, or 16 on the
+// 30-pin board) switches between the picture and the test card.
 
 #include <stdio.h>
 #include "board.h"
@@ -103,12 +103,16 @@ void app_main(void)
     ESP_ERROR_CHECK(media_init());
     ESP_LOGI(TAG, "%s %s on a %dx%d screen", ESPER_FIRMWARE_NAME, ESPER_FIRMWARE_VERSION,
              BOARD_LCD_WIDTH, BOARD_LCD_HEIGHT);
+    // The website reads this line to check the build matches the board picked there.
+    ESP_LOGI(TAG, "board %s: %s, BLK GPIO %d, button GPIO %d", BOARD_ID, BOARD_NAME,
+             BOARD_LCD_PIN_BL, BOARD_PIN_BUTTON);
 
     uint32_t hold;
     media_lock();
     bool picture = show_stored(&hold);
     media_unlock();
     screen_backlight(true);
+    ESP_LOGI(TAG, "backlight on: showing %s", picture ? "the picture" : "the test card");
 
     ESP_ERROR_CHECK(network_start());
     ESP_ERROR_CHECK(web_start());

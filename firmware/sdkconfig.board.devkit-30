@@ -1,0 +1,2 @@
+# Overlay for tools/build_web.sh: the 30-pin USB-C DevKit (BLK on GPIO 17, button on GPIO 16).
+CONFIG_ESPER_BOARD_DEVKIT_30=y

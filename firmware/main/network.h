@@ -6,7 +6,7 @@
 #include "esp_err.h"
 
 #define ESPER_FIRMWARE_NAME "ESPER player"
-#define ESPER_FIRMWARE_VERSION "1.0.0"
+#define ESPER_FIRMWARE_VERSION "1.1.0"
 
 // Starts Wi-Fi and the Improv listener. NVS must be initialised first.
 esp_err_t network_start(void);
