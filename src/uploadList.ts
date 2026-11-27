@@ -1,3 +1,5 @@
+import { ON_THE_SCREEN, SELECTED } from './examples.ts'
+import type { ItemStatus } from './flash/onScreen.ts'
 import { isAnimatedMedia } from './upload.ts'
 import { byNewest, type UploadRecord } from './uploadsDb.ts'
 
@@ -115,9 +117,11 @@ export type UploadTile = {
   animated: boolean
 }
 
-export function tileLabel(name: string, type: string, selected: boolean): string {
+export function tileLabel(name: string, type: string, status: ItemStatus): string {
   const kind = isAnimatedMedia(name, type) ? 'animation' : 'picture'
-  return selected ? `${name}, ${kind}, On the screen` : `${name}, ${kind}`
+  if (status === 'on-screen') return `${name}, ${kind}, ${ON_THE_SCREEN}`
+  if (status === 'selected') return `${name}, ${kind}, ${SELECTED}`
+  return `${name}, ${kind}`
 }
 
 export function moveTileIndex(index: number, count: number, key: string): number | null {

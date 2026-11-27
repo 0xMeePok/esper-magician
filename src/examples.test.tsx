@@ -6,7 +6,7 @@ import App from './App.tsx'
 import ExamplesSection from './components/ExamplesSection.tsx'
 import BoardScreen from './components/BoardScreen.tsx'
 import pageCss from './index.css?inline'
-import { examples, nextExampleIndex, ON_THE_SCREEN } from './examples.ts'
+import { examples, nextExampleIndex, ON_THE_SCREEN, SELECTED } from './examples.ts'
 import { keepsCurrentExample, showExample, showUpload } from './preview.ts'
 import { screenFor } from './screens.ts'
 import {
@@ -74,7 +74,11 @@ function renderPair(selectedId: string | null, state: ViewportState) {
   return renderToStaticMarkup(
     <>
       <BoardScreen screen={screenFor('1.9')} state={state} />
-      <ExamplesSection selectedId={selectedId} onSelect={() => {}} />
+      <ExamplesSection
+        selectedId={selectedId}
+        statusFor={(id) => (id === selectedId ? 'selected' : null)}
+        onSelect={() => {}}
+      />
     </>,
   )
 }
@@ -123,7 +127,8 @@ describe('photo frame example', () => {
     const loading = renderPair('photo-frame', published[0]!.state)
     expect(loading).toContain(`class="viewport__copy">${LOADING_MESSAGE}</p>`)
     expect(loading).toContain(`class="visually-hidden">${LOADING_MESSAGE}</p>`)
-    expect(loading).toContain(ON_THE_SCREEN)
+    expect(loading).toContain(SELECTED)
+    expect(loading).not.toContain(ON_THE_SCREEN)
     expect(loading).toContain('aria-checked="true"')
 
     const shown = renderPair('photo-frame', published[1]!.state)
@@ -144,7 +149,7 @@ describe('photo frame example', () => {
     expect(tall).toContain('alt=""')
     expect(shown).toContain('object-fit:contain')
     expect(shown).toContain(`aria-label="${VIEWPORT_LABEL}"`)
-    expect(shown).toContain(ON_THE_SCREEN)
+    expect(shown).toContain(SELECTED)
     expect(shown).not.toContain(EMPTY_MESSAGE)
     expect(shown).not.toContain(LOADING_MESSAGE)
     expect(

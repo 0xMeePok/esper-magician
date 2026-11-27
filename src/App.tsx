@@ -16,6 +16,7 @@ import { exampleById } from './examples.ts'
 import { FLASH_COPY } from './flash/copy.ts'
 import type { FlashSource } from './flash/deviceAsset.ts'
 import { infoCardPicture } from './flash/infoCard.ts'
+import { assetIdentity, itemStatus } from './flash/onScreen.ts'
 import { busy as flashBusy, useFlash } from './flash/useFlash.ts'
 import { mediaBudget } from './flashLayout.ts'
 import { useScreenContent } from './useScreenContent.ts'
@@ -35,7 +36,13 @@ export default function App() {
   const asset = content.assetFor(screenId)
   const selectedExample = asset?.kind === 'example' ? exampleById(asset.id) : undefined
   const flashBlocked = !asset ? FLASH_COPY.nothing : selectedExample?.kind === 'clock' ? FLASH_COPY.clock : null
-  const flash = useFlash({ screen, budget: mediaBudget(screenId), source: flashSource })
+  const selected = assetIdentity(asset, content.selectedId)
+  const flash = useFlash({
+    screen,
+    budget: mediaBudget(screenId),
+    source: flashSource,
+    identity: () => assetIdentity(content.assetFor(screenId), content.selectedId),
+  })
 
   /** What "Put it on my screen" sends, worked out at the moment it is clicked. */
   async function flashSource(): Promise<FlashSource> {
@@ -133,6 +140,7 @@ export default function App() {
           <div className="controls">
             <ExamplesSection
               selectedId={content.selectedExampleId}
+              statusFor={(id) => itemStatus(`example:${id}`, selected, flash.onScreen)}
               onSelect={content.selectExample}
             />
             <TryYourOwnSection onBrowse={openPicker} />
@@ -140,6 +148,7 @@ export default function App() {
               phase={content.phase}
               tiles={content.tiles}
               selectedId={content.selectedId}
+              statusFor={(id) => itemStatus(`upload:${id}`, selected, flash.onScreen)}
               saveError={content.saveError}
               announcement={content.announcement}
               announcementNonce={content.announcementNonce}

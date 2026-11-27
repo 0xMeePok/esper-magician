@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { coverDrawRect } from './viewportState.ts'
+import { ON_THE_SCREEN, SELECTED } from '../examples.ts'
+import type { ItemStatus } from '../flash/onScreen.ts'
 import {
   UNAVAILABLE_MESSAGE,
   focusAfterDelete,
@@ -15,6 +17,8 @@ type MyUploadsSectionProps = {
   phase: 'loading' | 'ready' | 'unavailable'
   tiles: UploadTile[]
   selectedId: string | null
+  /** How each upload is marked: on the screen, selected to send, or neither. */
+  statusFor: (id: string) => ItemStatus
   saveError: string | null
   announcement: string
   announcementNonce: number
@@ -27,6 +31,7 @@ export default function MyUploadsSection({
   phase,
   tiles,
   selectedId,
+  statusFor,
   saveError,
   announcement,
   announcementNonce,
@@ -166,6 +171,7 @@ export default function MyUploadsSection({
           <ul className={tiles.length > 12 ? 'upload-grid upload-grid-scroll' : 'upload-grid'}>
             {tiles.map((tile, index) => {
               const selected = tile.id === selectedId
+              const status = statusFor(tile.id)
               return (
                 <li className="upload-item" key={tile.id}>
                   <button
@@ -176,7 +182,7 @@ export default function MyUploadsSection({
                     }}
                     tabIndex={index === tabStop ? 0 : -1}
                     aria-pressed={selected}
-                    aria-label={tileLabel(tile.name, tile.type, selected)}
+                    aria-label={tileLabel(tile.name, tile.type, status)}
                     title={tile.name}
                     onClick={() => onSelect(tile.id)}
                     onKeyDown={(event) => onTileKeyDown(event, index)}
@@ -184,12 +190,17 @@ export default function MyUploadsSection({
                     <span className="upload-thumb">
                       {tile.animated ? <GifThumb src={tile.src} /> : <img src={tile.src} alt="" />}
                       {tile.animated ? <span className="upload-gif-badge">GIF</span> : null}
-                      {selected ? (
+                      {status === 'on-screen' ? (
                         <span className="upload-scrim">
                           <span className="upload-check" aria-hidden="true">
                             ✓
                           </span>
-                          <span className="upload-on-screen">On the screen</span>
+                          <span className="upload-on-screen">{ON_THE_SCREEN}</span>
+                        </span>
+                      ) : null}
+                      {status === 'selected' ? (
+                        <span className="upload-scrim upload-scrim--selected">
+                          <span className="upload-on-screen">{SELECTED}</span>
                         </span>
                       ) : null}
                     </span>

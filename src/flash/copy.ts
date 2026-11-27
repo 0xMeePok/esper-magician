@@ -35,6 +35,8 @@ export const FLASH_COPY = {
   serialHelper:
     "Read live from your screen's USB port at 115200 baud: esptool lines while installing, then the screen's own boot log.",
   serialChecksHeading: 'What the screen reported',
+  serialChecksNote:
+    "The ESP32 can only report what it sent: nothing is wired back from the screen, so it can't see the glass. If these are ticked but the screen stays dark, the problem is the wiring, power or the screen itself.",
   serialEmpty: 'Nothing received yet.',
   serialWatch: 'Show serial output',
   serialRestart: 'Restart screen',

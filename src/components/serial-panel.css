@@ -10,7 +10,8 @@
 
 .serial h3,
 .serial h4,
-.serial > .helper {
+.serial > .helper,
+.serial__checks > .helper {
   margin: 0;
 }
 

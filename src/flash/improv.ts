@@ -77,9 +77,15 @@ export class ImprovParser {
       const total = 9 + length + 1
       if (this.buffer.length < total) return packets
       const packet = this.buffer.slice(0, total)
-      this.buffer = this.buffer.slice(total)
       const sum = packet.slice(0, -1).reduce((all, byte) => (all + byte) & 0xff, 0)
-      if (sum !== packet.at(-1) || packet[6] !== 1) continue
+      if (sum !== packet.at(-1) || packet[6] !== 1) {
+        // Log text written at the same moment can land inside a packet. Step past this "IMPROV"
+        // only, so a real header inside the garbled bytes is still found.
+        this.text.push(...this.buffer.slice(0, 1))
+        this.buffer = this.buffer.slice(1)
+        continue
+      }
+      this.buffer = this.buffer.slice(total)
       const data = packet.slice(9, 9 + length)
       const type = packet[7]
       if (type === TYPE.state) packets.push({ type: 'state', state: data[0] ?? 0 })

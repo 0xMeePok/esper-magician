@@ -161,6 +161,9 @@ esp_err_t network_start(void)
     esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, on_event, NULL);
     ESP_RETURN_ON_ERROR(esp_wifi_set_mode(WIFI_MODE_STA), TAG, "mode");
     ESP_RETURN_ON_ERROR(esp_wifi_start(), TAG, "start");
+    // The screen runs off USB, so keep the radio awake. Modem sleep made the
+    // access point drop it part way through receiving a picture.
+    ESP_RETURN_ON_ERROR(esp_wifi_set_ps(WIFI_PS_NONE), TAG, "power save");
 
     uart_config_t uart = {
         .baud_rate = 115200,

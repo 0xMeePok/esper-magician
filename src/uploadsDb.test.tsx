@@ -193,10 +193,10 @@ describe('upload list', () => {
   })
 
   it('names tiles and moves the keyboard focus without wrapping', () => {
-    expect(tileLabel('sunset.jpg', 'image/jpeg', false)).toBe('sunset.jpg, picture')
-    expect(tileLabel('sunset.jpg', 'image/jpeg', true)).toBe('sunset.jpg, picture, On the screen')
-    expect(tileLabel('cat.gif', 'image/gif', false)).toBe('cat.gif, animation')
-    expect(tileLabel('clip.GIF', '', true)).toBe('clip.GIF, animation, On the screen')
+    expect(tileLabel('sunset.jpg', 'image/jpeg', null)).toBe('sunset.jpg, picture')
+    expect(tileLabel('sunset.jpg', 'image/jpeg', 'on-screen')).toBe('sunset.jpg, picture, On the screen')
+    expect(tileLabel('cat.gif', 'image/gif', null)).toBe('cat.gif, animation')
+    expect(tileLabel('clip.GIF', '', 'selected')).toBe('clip.GIF, animation, Selected')
 
     expect(moveTileIndex(1, 5, 'ArrowLeft')).toBe(0)
     expect(moveTileIndex(0, 5, 'ArrowLeft')).toBe(0)

@@ -48,6 +48,7 @@ export default function SerialPanel({ log, expected, monitoring, busy, onWatch, 
               </li>
             ))}
           </ul>
+          <p className="helper">{FLASH_COPY.serialChecksNote}</p>
         </div>
       ) : null}
 
