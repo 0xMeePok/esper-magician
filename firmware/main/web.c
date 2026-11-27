@@ -224,12 +224,13 @@ static esp_err_t setup_status(httpd_req_t *req)
     static const char *const names[] = {"idle", "joining", "joined", "failed"};
     const char *ssid = "";
     setup_state_t state = network_setup_state(&ssid);
-    char escaped[200], json[400];
+    char escaped[200], json[480];
     json_escape(escaped, sizeof(escaped), ssid);
     snprintf(json, sizeof(json),
-             "{\"setup\":%s,\"hotspot\":\"%s\",\"state\":\"%s\",\"ssid\":\"%s\",\"url\":\"%s\",\"local\":\"%s\"}",
+             "{\"setup\":%s,\"hotspot\":\"%s\",\"state\":\"%s\",\"ssid\":\"%s\",\"problem\":\"%s\","
+             "\"url\":\"%s\",\"local\":\"%s\"}",
              network_setup_active() ? "true" : "false", network_setup_name(), names[state], escaped,
-             network_url(), network_local_url());
+             network_setup_problem(), network_url(), network_local_url());
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
     return httpd_resp_sendstr(req, json);

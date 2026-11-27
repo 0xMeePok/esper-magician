@@ -9,7 +9,7 @@
 #include "esp_wifi_types.h"
 
 #define ESPER_FIRMWARE_NAME "ESPER player"
-#define ESPER_FIRMWARE_VERSION "1.3.0"
+#define ESPER_FIRMWARE_VERSION "1.3.1"
 
 // The screen's own address on its setup hotspot.
 #define NETWORK_SETUP_IP "192.168.4.1"
@@ -39,6 +39,10 @@ const char *network_setup_name(void);
 
 // How the last join from the setup page went, and which network it was.
 setup_state_t network_setup_state(const char **ssid);
+
+// After a failed join from the setup page, why: "wrong password", "network not
+// found (out of range, or 5 GHz only)" or "the router didn't answer". Otherwise "".
+const char *network_setup_problem(void);
 
 // Joins `ssid` in the background; the setup page polls network_setup_state().
 esp_err_t network_setup_join(const char *ssid, const char *password);

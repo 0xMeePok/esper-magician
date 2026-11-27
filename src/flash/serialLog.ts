@@ -210,8 +210,10 @@ export function screenWifi(log: LogLine[]): ScreenWifi | null {
       state = { ...(state ?? fresh()), problem: 'No Wi-Fi saved yet.' }
     } else if ((match = text.match(/network: joining (?:saved Wi-Fi )?"(.+)"/))) {
       state = { ...(state ?? fresh()), network: match[1]!, connected: false, problem: null }
-    } else if ((match = text.match(/network: couldn't join "(.+?)"/))) {
-      state = { ...(state ?? fresh()), network: match[1]!, connected: false, problem: `Couldn't join “${match[1]}”. Check the name and password (2.4 GHz only).` }
+    } else if ((match = text.match(/network: couldn't join "(.+?)"(?:: (.+))?$/))) {
+      // The reason comes from the router (reason_words in network.c).
+      const why = match[2] ?? 'check the name and password (2.4 GHz only)'
+      state = { ...(state ?? fresh()), network: match[1]!, connected: false, problem: `Couldn't join “${match[1]}”: ${why}.` }
     } else if (/setup: can't reach the saved Wi-Fi/.test(text)) {
       state = { ...(state ?? fresh()), problem: "Can't reach the saved Wi-Fi." }
     } else if ((match = text.match(/wifi:connected with (.+?), aid/))) {

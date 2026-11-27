@@ -27,7 +27,7 @@ export class WifiError extends Error {
 /** Chrome's Local Network Access: lets this https page call the screen's http address. */
 const LOCAL_NETWORK = { targetAddressSpace: 'local' } as RequestInit
 
-type ScreenInfo = { firmware?: string; version?: string; screen?: Size }
+type ScreenInfo = { firmware?: string; version?: string; hostname?: string; screen?: Size }
 
 async function askInfo(base: string, timeoutMs: number): Promise<ScreenInfo | null> {
   try {
@@ -40,6 +40,40 @@ async function askInfo(base: string, timeoutMs: number): Promise<ScreenInfo | nu
   } catch {
     return null
   }
+}
+
+/**
+ * Turns what someone types into the screen's address: its hotspot name ("ESPER-49F5C0", which is
+ * also its name on the Wi-Fi), "esper-49f5c0.local", an IP address, or a full http address.
+ */
+export function screenAddress(input: string): string | null {
+  const text = input.trim()
+  if (!text) return null
+  const code = text.match(/^esper-([0-9a-f]{6})(?:\.local)?\/?$/i)
+  if (code) return `http://esper-${code[1]!.toLowerCase()}.local/`
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `http://${text}`
+  try {
+    const url = new URL(withScheme)
+    // The screen only speaks plain http on the home network.
+    if (url.protocol !== 'http:' || !url.hostname) return null
+    return `${url.origin}/`
+  } catch {
+    return null
+  }
+}
+
+/** Checks, from this page, that there is a screen like this one at `url`. */
+export async function findScreen(
+  url: string,
+  screen: Size,
+  timeoutMs = 20000,
+): Promise<{ url: string; localUrl: string | null }> {
+  const info = await askInfo(url, timeoutMs)
+  if (!info) throw new WifiError('unreachable')
+  if (info.screen && (info.screen.width !== screen.width || info.screen.height !== screen.height)) {
+    throw new WifiError('other-screen')
+  }
+  return { url, localUrl: info.hostname ? `http://${info.hostname}.local/` : null }
 }
 
 /**

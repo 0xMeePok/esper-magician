@@ -230,3 +230,66 @@
   outline: 2px solid var(--color-accent);
   outline-offset: 1px;
 }
+
+.flash__connect {
+  display: grid;
+  gap: 6px;
+  padding: 12px 16px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.flash__connect > label {
+  font-weight: 600;
+}
+
+.flash__connect p {
+  margin: 0;
+}
+
+.flash__connect-row {
+  display: flex;
+  gap: 8px;
+}
+
+.flash__connect-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-control);
+  font: inherit;
+}
+
+.flash__screen {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+.flash__screen code {
+  font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.flash__usb {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.flash__usb > summary {
+  cursor: pointer;
+  color: var(--color-secondary);
+}
+
+.flash__usb[open] {
+  display: grid;
+  gap: 8px;
+}
+
+.flash__usb > .helper {
+  margin: 0;
+}

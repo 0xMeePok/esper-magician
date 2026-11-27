@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { sendInPage, WifiError } from './wifi.ts'
+import { findScreen, screenAddress, sendInPage, WifiError } from './wifi.ts'
 
 const DEVICE = { url: 'http://192.168.0.16/', localUrl: 'http://esper-49f5c0.local/', savedAt: 1 }
 const SCREEN = { width: 170, height: 320 }
@@ -55,5 +55,34 @@ describe('sendInPage', () => {
     const error = await sendInPage(DEVICE, IMAGE, SCREEN).catch((caught: unknown) => caught)
     expect(error).toBeInstanceOf(WifiError)
     expect((error as WifiError).message).toBe('The picture arrived damaged. Try again.')
+  })
+})
+
+describe('screenAddress', () => {
+  it("takes the screen's Wi-Fi name, its .local name, an IP address or an http address", () => {
+    expect(screenAddress('ESPER-49F5C0')).toBe('http://esper-49f5c0.local/')
+    expect(screenAddress(' esper-49f5c0.local ')).toBe('http://esper-49f5c0.local/')
+    expect(screenAddress('192.168.0.16')).toBe('http://192.168.0.16/')
+    expect(screenAddress('http://192.168.0.16/info')).toBe('http://192.168.0.16/')
+    expect(screenAddress('192.168.0.16:8080')).toBe('http://192.168.0.16:8080/')
+  })
+
+  it('refuses anything that is not plain http', () => {
+    expect(screenAddress('')).toBeNull()
+    expect(screenAddress('https://192.168.0.16/')).toBeNull()
+    expect(screenAddress('javascript:alert(1)')).toBeNull()
+    expect(screenAddress('not a host')).toBeNull()
+  })
+})
+
+describe('findScreen', () => {
+  it("checks the screen is there and learns its .local name", async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json({ screen: SCREEN, hostname: 'esper-49f5c0' })))
+    await expect(findScreen('http://192.168.0.16/', SCREEN)).resolves.toEqual({
+      url: 'http://192.168.0.16/',
+      localUrl: 'http://esper-49f5c0.local/',
+    })
+    vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('Failed to fetch'))))
+    await expect(findScreen('http://192.168.0.16/', SCREEN)).rejects.toMatchObject({ problem: 'unreachable' })
   })
 })

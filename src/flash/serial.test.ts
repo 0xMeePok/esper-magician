@@ -117,14 +117,15 @@ describe('screenWifi', () => {
     const lines = [
       board('I (650) setup: hotspot on: join "ESPER-49F5C0" (no password), then open http://192.168.4.1/'),
       board('I (9000) network: joining "penstamp"'),
-      board('W (39000) network: couldn\'t join "penstamp": check the name and password (2.4 GHz only)'),
+      board('W (12000) network: Wi-Fi "penstamp": wrong password (reason 15)'),
+      board('W (39000) network: couldn\'t join "penstamp": wrong password'),
     ]
     expect(screenWifi(lines)).toMatchObject({
       hotspot: { name: 'ESPER-49F5C0', url: 'http://192.168.4.1/' },
       network: 'penstamp',
       connected: false,
     })
-    expect(screenWifi(lines)?.problem).toMatch(/Couldn't join “penstamp”/)
+    expect(screenWifi(lines)?.problem).toBe("Couldn't join “penstamp”: wrong password.")
 
     const later = [...lines, board('I (99000) setup: hotspot off')]
     expect(screenWifi(later)?.hotspot).toBeNull()

@@ -1,15 +1,19 @@
 import { useId, useState, type FormEvent } from 'react'
-import { boards, type BoardId } from '../boards.ts'
+import { boardFor, boards, type BoardId } from '../boards.ts'
 import { FLASH_COPY, problemMessage } from '../flash/copy.ts'
-import { busy, type FlashState } from '../flash/useFlash.ts'
+import { busy, type ConnectState, type FlashState } from '../flash/useFlash.ts'
 import './flash-panel.css'
 
 type FlashPanelProps = {
   state: FlashState
   /** Why nothing can be sent right now, or null when it can. */
   blocked: string | null
-  /** True once this browser knows the screen's Wi-Fi address. */
-  wireless: boolean
+  /** The screen's Wi-Fi address, once this browser knows it. */
+  screenUrl: string | null
+  connect: ConnectState
+  onConnect: (input: string) => void
+  onKeepAddress: (url: string) => void
+  onForgetScreen: () => void
   /** False when this browser can't use USB (Safari, Firefox, phones). */
   usbAvailable: boolean
   /** The board picked for USB installs, or null before one is picked. */
@@ -29,22 +33,20 @@ function percent(fraction: number): number {
 }
 
 export default function FlashPanel(props: FlashPanelProps) {
-  const { state, blocked, wireless, usbAvailable } = props
+  const { state, blocked, usbAvailable } = props
+  const wireless = props.screenUrl !== null
   const helperId = useId()
   const working = busy(state)
   const held = working || blocked !== null || state.phase === 'wifi-setup'
   const wifiDisabled = held || !wireless
   const usbDisabled = held || !usbAvailable || props.board === null
 
-  let helper: string = wireless ? FLASH_COPY.helperWifi : FLASH_COPY.helperUsb
+  let helper: string = wireless ? FLASH_COPY.helperWifi : FLASH_COPY.connectFirst
   if (blocked) helper = blocked
-  else if (!usbAvailable) helper = wireless ? FLASH_COPY.helperWifi : FLASH_COPY.needsChrome
-  else if (props.board === null) helper = wireless ? `${FLASH_COPY.helperWifi} ${FLASH_COPY.pickBoard}` : FLASH_COPY.pickBoard
-  else if (!wireless) helper = `${FLASH_COPY.helperUsb} ${FLASH_COPY.wifiNeedsSetup}`
 
   return (
     <section className="flash" aria-label="Put it on your screen">
-      {usbAvailable ? <BoardPicker board={props.board} disabled={working} onChoose={props.onChooseBoard} /> : null}
+      <ScreenConnect {...props} disabled={working} />
       <div className="flash__buttons">
         <SendButton label={FLASH_COPY.sendWifi} disabled={wifiDisabled} describedBy={helperId} onClick={props.onStartWifi} />
         <SendButton label={FLASH_COPY.sendUsb} disabled={usbDisabled} describedBy={helperId} onClick={props.onStartUsb} />
@@ -53,7 +55,97 @@ export default function FlashPanel(props: FlashPanelProps) {
         {helper}
       </p>
       <FlashStatus {...props} />
+      {usbAvailable ? (
+        <details className="flash__usb">
+          <summary>
+            {FLASH_COPY.usbSummary} ·{' '}
+            {props.board ? boardFor(props.board).title : FLASH_COPY.pickBoard}
+          </summary>
+          <p className="helper">
+            {FLASH_COPY.usbSummaryHelper} {FLASH_COPY.helperUsb}
+          </p>
+          <BoardPicker board={props.board} disabled={working} onChoose={props.onChooseBoard} />
+        </details>
+      ) : null}
     </section>
+  )
+}
+
+/** Which screen Wi-Fi sends go to, or a box to find it by name or address. No USB needed. */
+function ScreenConnect({
+  screenUrl,
+  connect,
+  disabled,
+  onConnect,
+  onKeepAddress,
+  onForgetScreen,
+}: FlashPanelProps & { disabled: boolean }) {
+  const [input, setInput] = useState('')
+  const inputId = useId()
+  const helperId = useId()
+
+  if (screenUrl) {
+    return (
+      <p className="flash__screen">
+        {FLASH_COPY.sendingTo} <code>{screenUrl}</code>{' '}
+        <button type="button" className="link-button" onClick={onForgetScreen} disabled={disabled}>
+          {FLASH_COPY.change}
+        </button>
+      </p>
+    )
+  }
+
+  const checking = connect.status === 'checking'
+  return (
+    <form
+      className="flash__connect"
+      onSubmit={(event: FormEvent) => {
+        event.preventDefault()
+        if (input.trim() && !checking) onConnect(input)
+      }}
+    >
+      <label htmlFor={inputId}>{FLASH_COPY.connectHeading}</label>
+      <p id={helperId} className="helper">
+        {FLASH_COPY.connectHelper}
+      </p>
+      <div className="flash__connect-row">
+        <input
+          id={inputId}
+          aria-describedby={helperId}
+          aria-label={FLASH_COPY.connectLabel}
+          value={input}
+          onChange={(event) => setInput(event.target.value)}
+          placeholder={FLASH_COPY.connectPlaceholder}
+          autoComplete="off"
+          autoCapitalize="none"
+          spellCheck={false}
+          disabled={disabled}
+        />
+        <button type="submit" className="button button-file" disabled={disabled || checking || !input.trim()}>
+          {FLASH_COPY.connect}
+        </button>
+      </div>
+      {checking ? <p aria-live="polite">{FLASH_COPY.connecting}</p> : null}
+      {connect.status === 'failed' ? (
+        <div aria-live="assertive">
+          <p className="board-error" role="alert">
+            {connect.problem === 'bad-address'
+              ? FLASH_COPY.connectBad
+              : connect.problem === 'other-screen'
+                ? FLASH_COPY.connectOther
+                : FLASH_COPY.connectUnreachable}
+          </p>
+          {connect.problem === 'unreachable' && connect.url ? (
+            <p className="helper">
+              <button type="button" className="link-button" onClick={() => onKeepAddress(connect.url!)}>
+                {FLASH_COPY.keepAddress}
+              </button>{' '}
+              {FLASH_COPY.keepAddressHelper}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </form>
   )
 }
 

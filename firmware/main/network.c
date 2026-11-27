@@ -45,6 +45,7 @@ static TimerHandle_t s_setup_off_timer;
 static volatile bool s_setup;
 static char s_setup_name[16];
 static volatile setup_state_t s_setup_state;
+static volatile uint8_t s_last_reason; // why the router last turned the screen away
 static char s_setup_ssid[33];
 static char s_setup_password[65];
 
@@ -102,9 +103,43 @@ static void start_mdns(void)
     s_mdns_started = true;
 }
 
+// The router's reason for turning the screen away, in plain words.
+static const char *reason_words(uint8_t reason)
+{
+    switch (reason) {
+    case WIFI_REASON_NO_AP_FOUND:
+    case WIFI_REASON_NO_AP_FOUND_W_COMPATIBLE_SECURITY:
+    case WIFI_REASON_NO_AP_FOUND_IN_AUTHMODE_THRESHOLD:
+    case WIFI_REASON_NO_AP_FOUND_IN_RSSI_THRESHOLD:
+        return "network not found (out of range, or 5 GHz only)";
+    case WIFI_REASON_AUTH_FAIL:
+    case WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT:
+    case WIFI_REASON_HANDSHAKE_TIMEOUT:
+    case WIFI_REASON_MIC_FAILURE:
+        return "wrong password";
+    case WIFI_REASON_AUTH_EXPIRE:
+    case WIFI_REASON_ASSOC_FAIL:
+    case WIFI_REASON_CONNECTION_FAIL:
+    case WIFI_REASON_BEACON_TIMEOUT:
+        return "the router didn't answer";
+    default:
+        return "disconnected";
+    }
+}
+
+const char *network_setup_problem(void)
+{
+    return s_setup_state == SETUP_FAILED ? reason_words(s_last_reason) : "";
+}
+
 static void on_event(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
     if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
+        const wifi_event_sta_disconnected_t *gone = data;
+        s_last_reason = gone->reason;
+        // The website shows this line to say why the Wi-Fi didn't work.
+        ESP_LOGW(TAG, "Wi-Fi \"%.*s\": %s (reason %d)", gone->ssid_len, (const char *)gone->ssid,
+                 reason_words(gone->reason), gone->reason);
         xEventGroupClearBits(s_events, CONNECTED_BIT);
         if (s_joining && ++s_retries > JOIN_RETRIES) {
             xEventGroupSetBits(s_events, FAILED_BIT);
@@ -151,6 +186,7 @@ static bool join(const char *ssid, const char *password)
     ESP_LOGI(TAG, "joining \"%s\"", ssid);
     s_joining = true;
     s_retries = 0;
+    s_last_reason = 0;
     xEventGroupClearBits(s_events, CONNECTED_BIT | FAILED_BIT);
     esp_wifi_disconnect();
     esp_wifi_set_config(WIFI_IF_STA, &cfg); // the Wi-Fi driver saves this in NVS
@@ -159,7 +195,8 @@ static bool join(const char *ssid, const char *password)
                                            pdMS_TO_TICKS(30000));
     s_joining = false;
     if (!(bits & CONNECTED_BIT)) {
-        ESP_LOGW(TAG, "couldn't join \"%s\": check the name and password (2.4 GHz only)", ssid);
+        ESP_LOGW(TAG, "couldn't join \"%s\": %s", ssid,
+                 s_last_reason ? reason_words(s_last_reason) : "no answer in 30 s");
         esp_wifi_connect(); // keep trying in the background with the new details
     }
     return bits & CONNECTED_BIT;

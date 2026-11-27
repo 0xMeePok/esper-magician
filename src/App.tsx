@@ -122,7 +122,11 @@ export default function App() {
             <FlashPanel
               state={flash.state}
               blocked={flashBlocked}
-              wireless={flash.device !== null}
+              screenUrl={flash.device?.url ?? null}
+              connect={flash.connect}
+              onConnect={flash.connectScreen}
+              onKeepAddress={flash.keepAddress}
+              onForgetScreen={flash.forgetScreen}
               usbAvailable={flash.usbAvailable}
               board={flash.board}
               onChooseBoard={flash.chooseBoard}

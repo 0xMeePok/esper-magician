@@ -22,6 +22,10 @@
   .ok { border-color: #0f766e; background: #e7f3f1; }
   .bad { border-color: #b42318; background: #fdecea; }
   a { color: #0f766e; word-break: break-all; }
+  .show { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.5rem; font-weight: 400; }
+  .show input { width: auto; margin: 0; }
+  /* The label rule above would otherwise show hidden fields. */
+  [hidden] { display: none !important; }
 </style>
 </head>
 <body>
@@ -29,15 +33,17 @@
   <h1>Set up your ESPER screen</h1>
   <p class="helper">Pick your home Wi-Fi so the screen can join it. It needs a 2.4 GHz network.</p>
   <form id="form">
-    <label>Wi-Fi network
+    <label id="pick">Wi-Fi network
       <select id="list"><option value="">Looking for networks…</option></select>
     </label>
+    <!-- Only for a network that isn't in the list ("Other network…"). -->
     <label id="other" hidden>Network name
       <input id="ssid" autocomplete="off" maxlength="32" autocapitalize="none">
     </label>
     <label>Password
       <input id="password" type="password" maxlength="64" autocomplete="current-password">
     </label>
+    <label class="show"><input id="reveal" type="checkbox"> Show password</label>
     <button id="join" type="submit">Join</button>
   </form>
   <div id="status" class="status" hidden></div>
@@ -53,6 +59,7 @@
   var ssid = document.getElementById('ssid');
   var password = document.getElementById('password');
   var join = document.getElementById('join');
+  var pick = document.getElementById('pick');
   var status = document.getElementById('status');
   var OTHER = '\u0000other';
 
@@ -102,9 +109,15 @@
     });
     list.appendChild(option(OTHER, 'Other network…'));
     if (!networks || !networks.length) {
+      // Nothing found: just the name box.
       list.value = OTHER;
+      pick.hidden = true;
       other.hidden = false;
     }
+  });
+
+  document.getElementById('reveal').addEventListener('change', function (event) {
+    password.type = event.target.checked ? 'text' : 'password';
   });
 
   list.addEventListener('change', function () {
@@ -132,7 +145,14 @@
         join.disabled = false;
         return;
       }
-      show('bad', ['Your screen couldn’t join ' + s.ssid + '. Check the name and password, and that it is a 2.4 GHz network.']);
+      // Why, from the router's answer (network.c, reason_words).
+      var why = {
+        'wrong password': 'The password for ' + s.ssid + ' was wrong. Check it (Show password helps) and try again.',
+        'network not found (out of range, or 5 GHz only)':
+          'Your screen can’t see ' + s.ssid + '. It may be too far from the router, or 5 GHz only: the screen needs 2.4 GHz.',
+        'the router didn’t answer': s.ssid + ' didn’t answer. Move the screen closer to the router and try again.',
+      }[s.problem.replace("'", '’')];
+      show('bad', [why || 'Your screen couldn’t join ' + s.ssid + '. Check the name and password, and that it is a 2.4 GHz network.']);
       join.disabled = false;
     });
   }

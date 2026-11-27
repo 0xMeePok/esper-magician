@@ -10,7 +10,7 @@ import { packMediaImage, readMediaHeader } from './mediaImage.ts'
 import { readOnScreen, reconcileOnScreen, saveOnScreen, type OnScreen } from './onScreen.ts'
 import { LineBuffer, MAX_LOG_LINES, reportedPicture, type Expected, type LogLine } from './serialLog.ts'
 import { choosePort, hasWebSerial, ImprovLink, writeOverUsb, type LinkOptions } from './usb.ts'
-import { openScreenWindow, sendInPage, sendOverWifi } from './wifi.ts'
+import { findScreen, openScreenWindow, screenAddress, sendInPage, sendOverWifi, WifiError } from './wifi.ts'
 
 export type FlashRoute = 'usb' | 'wifi'
 
@@ -36,6 +36,7 @@ export type FlashDriver = {
     options: LinkOptions,
   ) => Promise<Pick<ImprovLink, 'waitForPlayer' | 'joinWifi' | 'restart' | 'close'>>
   sendInPage: typeof sendInPage
+  findScreen: typeof findScreen
   openScreenWindow: typeof openScreenWindow
   sendOverWifi: typeof sendOverWifi
   prepareDeviceAsset: typeof prepareDeviceAsset
@@ -48,6 +49,7 @@ export const browserDriver: FlashDriver = {
   writeOverUsb,
   openImprov: (port, options) => ImprovLink.open(port, options),
   sendInPage,
+  findScreen,
   openScreenWindow,
   sendOverWifi,
   prepareDeviceAsset,
@@ -59,6 +61,12 @@ let activeDriver = browserDriver
 export function setFlashDriver(next?: FlashDriver) {
   activeDriver = next ?? browserDriver
 }
+
+/** Finding the screen on the Wi-Fi from its name or address, with no USB. */
+export type ConnectState =
+  | { status: 'idle' }
+  | { status: 'checking'; url: string }
+  | { status: 'failed'; url: string | null; problem: 'bad-address' | 'unreachable' | 'other-screen' }
 
 export function busy(state: FlashState): boolean {
   return state.phase === 'preparing' || state.phase === 'sending' || state.phase === 'restarting' || state.phase === 'joining'
@@ -80,6 +88,7 @@ export function useFlash({ screen, budget, source, identity }: Options) {
   const [log, setLog] = useState<LogLine[]>([])
   const [expected, setExpected] = useState<Expected | null>(null)
   const [monitoring, setMonitoring] = useState(false)
+  const [connect, setConnect] = useState<ConnectState>({ status: 'idle' })
   const [onScreen, setOnScreenState] = useState<OnScreen | null>(() => readOnScreen())
   /** The picture being sent, until it is on the screen. */
   const pending = useRef<OnScreen | null>(null)
@@ -312,6 +321,40 @@ export function useFlash({ screen, budget, source, identity }: Options) {
     if (known) run(() => sendThroughScreenPage(known))
   }
 
+  /** Finds the screen from what was typed, checks it's there, and sends over Wi-Fi to it from now on. */
+  async function connectScreen(input: string) {
+    const url = screenAddress(input)
+    if (!url) {
+      setConnect({ status: 'failed', url: null, problem: 'bad-address' })
+      return
+    }
+    setConnect({ status: 'checking', url })
+    try {
+      const found = await activeDriver.findScreen(url, screen)
+      remember([found.url, ...(found.localUrl ? [found.localUrl] : [])])
+      setConnect({ status: 'idle' })
+    } catch (error) {
+      const problem = error instanceof WifiError && error.problem === 'other-screen' ? 'other-screen' : 'unreachable'
+      setConnect({ status: 'failed', url, problem })
+    }
+  }
+
+  /**
+   * For browsers that won't let this page check the screen: keep the address anyway, so the
+   * screen's own page can take pictures.
+   */
+  function keepAddress(url: string) {
+    remember([url])
+    setConnect({ status: 'idle' })
+  }
+
+  /** Forgets the screen, to connect to another. */
+  function forgetScreen() {
+    saveKnownDevice(null)
+    setDevice(null)
+    setConnect({ status: 'idle' })
+  }
+
   /** Clears a finished or failed send's message. */
   const dismiss = useCallback(() => {
     setState((current) => (current.phase === 'done' || current.phase === 'error' ? { phase: 'idle' } : current))
@@ -350,6 +393,10 @@ export function useFlash({ screen, budget, source, identity }: Options) {
     dismiss,
     submitWifi,
     skipWifi,
+    connect,
+    connectScreen: (input: string) => void connectScreen(input),
+    keepAddress,
+    forgetScreen,
     /** Sends over Wi-Fi go to the screen at these addresses (from its log). */
     useScreen: (url: string, localUrl: string | null) => void remember([url, ...(localUrl ? [localUrl] : [])]),
     watchSerial: () => void watchSerial(),
