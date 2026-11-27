@@ -278,7 +278,9 @@ describe('put it on my screen (ASH-19)', () => {
     expect(device).toMatchObject({ url: URLS[0] })
     expect(readMediaHeader(image)).toMatchObject({ kind: 'jpeg', length: JPEG.length })
     expect(flashText()).toContain(FLASH_COPY.done)
-    expect(flashText()).toContain(FLASH_COPY.doneWifi)
+    expect(flashText()).toContain(FLASH_COPY.doneSentWifi)
+    // "Next time…" is for after a USB install, not a Wi-Fi send.
+    expect(flashText()).not.toContain(FLASH_COPY.doneWifi)
 
     // The ✕ clears it.
     await click(document.querySelector(`.flash__status button[aria-label="${FLASH_COPY.dismiss}"]`))

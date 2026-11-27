@@ -271,7 +271,9 @@ function FlashStatus({ state, onStartScreenPage, onDismiss, onSubmitWifi, onSkip
         <div className="flash__status flash__status--done flash__status--dismissable" aria-live="polite">
           <DismissButton onClick={onDismiss} />
           <p>{FLASH_COPY.done}</p>
-          <p className="helper">{state.wifi ? FLASH_COPY.doneWifi : FLASH_COPY.doneNoWifi}</p>
+          <p className="helper">
+            {state.route === 'wifi' ? FLASH_COPY.doneSentWifi : state.wifi ? FLASH_COPY.doneWifi : FLASH_COPY.doneNoWifi}
+          </p>
         </div>
       )
     case 'error':

@@ -38,7 +38,8 @@ export const FLASH_COPY = {
   restarting: 'Restarting your screen…',
   joining: 'Joining your Wi-Fi…',
   done: 'Done. Your screen is showing it now.',
-  doneWifi: 'Next time it changes over Wi-Fi.',
+  doneSentWifi: 'Sent over Wi-Fi.',
+  doneWifi: 'Next time you can send it over Wi-Fi.',
   doneNoWifi: 'To change it over Wi-Fi next time, plug it in again and set up Wi-Fi.',
   wifiHeading: 'Change pictures over Wi-Fi next time',
   wifiHelper:
