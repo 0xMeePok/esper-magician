@@ -4,6 +4,7 @@ import CompressionPanel from './components/CompressionPanel.tsx'
 import CropControl from './components/CropControl.tsx'
 import CropEditor from './components/CropEditor.tsx'
 import FlashPanel from './components/FlashPanel.tsx'
+import SerialPanel from './components/SerialPanel.tsx'
 import ExamplesSection from './components/ExamplesSection.tsx'
 import Footer from './components/Footer.tsx'
 import Header from './components/Header.tsx'
@@ -15,7 +16,7 @@ import { exampleById } from './examples.ts'
 import { FLASH_COPY } from './flash/copy.ts'
 import type { FlashSource } from './flash/deviceAsset.ts'
 import { infoCardPicture } from './flash/infoCard.ts'
-import { useFlash } from './flash/useFlash.ts'
+import { busy as flashBusy, useFlash } from './flash/useFlash.ts'
 import { mediaBudget } from './flashLayout.ts'
 import { useScreenContent } from './useScreenContent.ts'
 
@@ -110,11 +111,24 @@ export default function App() {
               blocked={flashBlocked}
               wireless={flash.device !== null}
               usbAvailable={flash.usbAvailable}
+              board={flash.board}
+              onChooseBoard={flash.chooseBoard}
               onStart={flash.start}
               onStartUsb={flash.startUsb}
               onSubmitWifi={(ssid, password) => void flash.submitWifi(ssid, password)}
               onSkipWifi={flash.skipWifi}
             />
+            {flash.usbAvailable ? (
+              <SerialPanel
+                log={flash.log}
+                expected={flash.expected}
+                monitoring={flash.monitoring}
+                busy={flashBusy(flash.state)}
+                onWatch={flash.watchSerial}
+                onRestart={flash.restartScreen}
+                onStop={flash.stopSerial}
+              />
+            ) : null}
           </div>
           <div className="controls">
             <ExamplesSection

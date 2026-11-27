@@ -49,11 +49,12 @@ function decodeStrings(data: number[]): string[] {
 }
 
 /**
- * Pulls Improv packets out of the serial stream, skipping everything else (boot messages and logs
- * share the same line).
+ * Pulls Improv packets out of the serial stream. Everything else (the boot messages and logs that
+ * share the same line) is kept as it came, for `takeText`.
  */
 export class ImprovParser {
   private buffer: number[] = []
+  private text: number[] = []
 
   push(bytes: Uint8Array): ImprovPacket[] {
     this.buffer.push(...bytes)
@@ -61,11 +62,16 @@ export class ImprovParser {
     for (;;) {
       const start = this.findHeader()
       if (start < 0) {
-        // Keep a possible partial header at the end.
-        this.buffer = this.buffer.slice(-(HEADER.length - 1))
+        // Hold back only an ending that could be the start of a header.
+        const keep = this.partialHeaderLength()
+        this.text.push(...this.buffer.slice(0, this.buffer.length - keep))
+        this.buffer = this.buffer.slice(this.buffer.length - keep)
         return packets
       }
-      if (start > 0) this.buffer = this.buffer.slice(start)
+      if (start > 0) {
+        this.text.push(...this.buffer.slice(0, start))
+        this.buffer = this.buffer.slice(start)
+      }
       if (this.buffer.length < 9) return packets
       const length = this.buffer[8]!
       const total = 9 + length + 1
@@ -82,6 +88,21 @@ export class ImprovParser {
         packets.push({ type: 'result', command: data[0]!, strings: decodeStrings(data.slice(2, 2 + data[1]!)) })
       }
     }
+  }
+
+  /** The bytes around the Improv packets so far: the board's own log output. */
+  takeText(): Uint8Array {
+    const out = Uint8Array.from(this.text)
+    this.text = []
+    return out
+  }
+
+  private partialHeaderLength(): number {
+    for (let keep = Math.min(HEADER.length - 1, this.buffer.length); keep > 0; keep--) {
+      const tail = this.buffer.slice(this.buffer.length - keep)
+      if (tail.every((byte, i) => byte === HEADER[i])) return keep
+    }
+    return 0
   }
 
   private findHeader(): number {

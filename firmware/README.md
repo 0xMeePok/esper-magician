@@ -2,7 +2,13 @@
 
 This is an [ESP-IDF](https://docs.espressif.com/projects/esp-idf/en/stable/esp32/get-started/index.html)
 project for the ESPER screen: a 1.9-inch ST7789 (170×320, portrait) wired to an
-ESP32 DevKit 38-pin (ESP32-WROOM-32E, 4 MB flash, CP2102 USB-serial).
+ESP32 DevKit, either the 38-pin one (ESP32-WROOM-32E, CP2102 USB-serial) or the
+30-pin USB-C one (ESP32-WROOM, CH340C USB-serial). Both have 4 MB of flash.
+
+The two boards put the screen's backlight (BLK) and the button on different
+pins, so each gets its own build. Firmware for the wrong board never switches
+the backlight on, and the screen looks dead. The website asks which board you
+have before installing, and the screen prints its board in its boot log.
 
 It shows the picture or GIF the website sends, and lets the website send a new
 one over Wi-Fi:
@@ -14,7 +20,7 @@ one over Wi-Fi:
   its `media` partition and shows it straight away.
 
 Before anything has been sent, or if what's stored is damaged, the screen shows
-a colour test card. The button on GPIO 33 switches between the picture and the
+a colour test card. The button (GPIO 33, or 16 on the 30-pin board) switches between the picture and the
 test card.
 
 You don't need any of this to use the screen: the website builds nothing and
@@ -33,12 +39,14 @@ connect its VCC to 5V.
 | RES | GPIO 4 |
 | DC | GPIO 21 |
 | CS | GPIO 22 |
-| BLK | GPIO 32 |
+| BLK | GPIO 32 (38-pin) or GPIO 17 (30-pin) |
 | VCC | 3V3 |
 | GND | GND |
 
-Plus a push button between **GPIO 33** and **GND**. No resistor is needed,
-because the firmware turns on the pin's built-in pull-up.
+Plus a push button between **GPIO 33** (38-pin) or **GPIO 16** (30-pin) and
+**GND**. No resistor is needed, because the firmware turns on the pin's
+built-in pull-up. The 30-pin breadboard wiring is in `wiring-30pin-breadboard.png`
+at the top of the repo.
 
 Go by the labels printed on your screen. If its pins are in a different order,
 move the wires to match the labels, not the positions. The pins live in
@@ -92,6 +100,7 @@ Open the ESP-IDF terminal (Windows) or run `. $HOME/esp/esp-idf/export.sh`
 ```bash
 cd firmware
 idf.py set-target esp32      # only the first time
+idf.py menuconfig            # ESPER screen -> pick your board (38-pin is the default)
 idf.py build
 idf.py -p PORT flash monitor
 ```
@@ -115,12 +124,34 @@ After changing the player, rebuild it into the website and commit the result:
 ```bash
 cd firmware
 tools/build_web.sh
+# or, without ESP-IDF installed:
+docker run --rm -v "$PWD/..":/project -w /project/firmware espressif/idf:v6.1 tools/build_web.sh
 ```
 
-That writes `public/firmware/esper-1.9/` (bootloader, partition table, player
-and `manifest.json` with each file's offset, size and SHA-256). The website
-refuses to install if a download doesn't match, or if the firmware keeps
-pictures somewhere other than where the site writes them.
+That builds once per board (`sdkconfig.board.devkit-38` and
+`sdkconfig.board.devkit-30` on top of `sdkconfig.defaults`) and writes
+`public/firmware/esper-1.9/<board>/`: bootloader, partition table, player and a
+`manifest.json` in the ESP Web Tools format (`builds` → `chipFamily` → `parts`),
+plus the board and each part's size and SHA-256. The website refuses to install
+if a download doesn't match, if the manifest is for another board, or if the
+firmware keeps pictures somewhere other than where the site writes them. After
+writing, esptool-js checks each part against the MD5 the chip reads back from
+its flash.
+
+## Check that an install worked
+
+The screen logs these lines at 115200 baud when it starts. The website shows
+them under "Your screen's serial output", or use any serial monitor:
+
+```
+I (…) esper: ESPER player 1.1.0 on a 170x320 screen
+I (…) esper: board devkit-30: 1.9-inch ST7789 on an ESP32 DevKit 30-pin, BLK GPIO 17, button GPIO 16
+I (…) media: JPEG, 23456 bytes, CRC 0x1a2b3c4d OK
+I (…) media: drew JPEG 170x320 at (0,0)
+I (…) esper: backlight on: showing the picture
+```
+
+The website compares the CRC with the one it sent.
 
 ## Tests
 
@@ -130,7 +161,7 @@ and `improv.c` with your computer's C compiler (`test/host.c`,
 
 ## If the picture looks wrong
 
-Press the button on GPIO 33 to see the test card: seven bars (white, yellow,
+Press the button (GPIO 33, or 16 on the 30-pin board) to see the test card: seven bars (white, yellow,
 cyan, green, magenta, red, blue), a grey ramp, a white triangle in the top-left
 corner, and a thin white frame round the edge. Then run `idf.py menuconfig`,
 open **ESPER screen**, change one setting, and build and flash again.

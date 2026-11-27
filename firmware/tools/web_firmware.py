@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Copies a finished build into the website, ready for "Put it on my screen".
 
-    python tools/web_firmware.py build ../public/firmware/esper-1.9
+    python tools/web_firmware.py build ../public/firmware/esper-1.9/devkit-38 devkit-38
 
-Writes the bootloader, partition table and player, plus manifest.json with
-each file's flash offset, size and SHA-256. The website checks every download
-against the manifest, and checks that the media partition is where it writes
-pictures. Run it through tools/build_web.sh.
+Writes the bootloader, partition table and player, plus manifest.json in the
+ESP Web Tools format (builds -> chipFamily -> parts with path and offset), with
+each part's size and SHA-256 and the board it was built for. The website checks
+every download against the manifest, that the board matches the one picked,
+and that the media partition is where it writes pictures. Run it through
+tools/build_web.sh.
 """
 
 import csv
@@ -38,14 +40,17 @@ def firmware_version() -> str:
 
 
 def main():
-    if len(sys.argv) != 3:
+    if len(sys.argv) != 4:
         sys.exit(__doc__)
-    build, out = Path(sys.argv[1]), Path(sys.argv[2])
+    build, out, board = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
     args = json.loads((build / "flasher_args.json").read_text())
     if args["extra_esptool_args"]["chip"] != "esp32":
         sys.exit("Expected an ESP32 build")
 
     sdkconfig = (build / "sdkconfig").read_text() if (build / "sdkconfig").exists() else ""
+    flag = "CONFIG_ESPER_BOARD_" + board.upper().replace("-", "_") + "=y"
+    if flag not in sdkconfig:
+        sys.exit(f"{build} was not built for {board} (no {flag} in its sdkconfig)")
     table = re.search(r'CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="([^"]+)"', sdkconfig)
     partitions = HERE / (table.group(1) if table else "partitions.media.csv")
 
@@ -68,14 +73,15 @@ def main():
     manifest = {
         "name": "ESPER player",
         "version": firmware_version(),
-        "chip": "ESP32",
         "screen": "1.9",
+        "board": board,
         "mediaOffset": media_offset(partitions),
-        "parts": parts,
+        "new_install_prompt_erase": False,
+        "builds": [{"chipFamily": "ESP32", "parts": parts}],
     }
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     total = sum(part["size"] for part in parts)
-    print(f"Wrote {out} ({len(parts)} files, {total // 1024} KB, media at 0x{manifest['mediaOffset']:x})")
+    print(f"Wrote {out} for {board} ({len(parts)} files, {total // 1024} KB, media at 0x{manifest['mediaOffset']:x})")
 
 
 if __name__ == "__main__":

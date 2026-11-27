@@ -28,6 +28,18 @@ export const FLASH_COPY = {
   wifiSkip: 'Not now',
   wifiFailed: "Your screen couldn't join that Wi-Fi. Check the name and password. It needs a 2.4 GHz network.",
   tryAgain: 'Try again',
+  boardHeading: 'Which board is your screen wired to?',
+  boardHelper: 'Each board gets firmware made for its wiring. The wrong one leaves the screen dark.',
+  pickBoard: 'Pick the board your screen is wired to first.',
+  serialHeading: "Your screen's serial output",
+  serialHelper:
+    "Read live from your screen's USB port at 115200 baud: esptool lines while installing, then the screen's own boot log.",
+  serialChecksHeading: 'What the screen reported',
+  serialEmpty: 'Nothing received yet.',
+  serialWatch: 'Show serial output',
+  serialRestart: 'Restart screen',
+  serialStop: 'Stop',
+  serialListening: 'Listening to your screen…',
 } as const
 
 export type FlashProblem =
@@ -38,6 +50,8 @@ export type FlashProblem =
   | 'no-response'
   | 'wrong-chip'
   | 'unplugged'
+  | 'verify-failed'
+  | 'no-board'
   | 'unreachable'
   | 'other-screen'
   | 'failed'
@@ -52,6 +66,9 @@ const MESSAGES: Record<FlashProblem, string> = {
     "Your screen didn't answer. Unplug it, plug it back in, and try again. If that doesn't work, hold the BOOT button on the board while you click.",
   'wrong-chip': "That device isn't an ESPER screen. Pick the ESP32 board in the list.",
   unplugged: 'The screen was unplugged. Plug it back in and try again.',
+  'verify-failed':
+    "What's in your screen's memory doesn't match what was sent, so the install didn't take. Try again; if it keeps happening, try another USB cable.",
+  'no-board': FLASH_COPY.pickBoard,
   unreachable:
     "Couldn't reach your screen over Wi-Fi. Check it's switched on and on the same Wi-Fi as this computer, or plug it in with USB.",
   'other-screen': "The screen at that address isn't a 1.9-inch ESPER screen. Set it up again with USB.",

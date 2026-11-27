@@ -1,4 +1,5 @@
 import { useId, useState, type FormEvent } from 'react'
+import { boards, type BoardId } from '../boards.ts'
 import { FLASH_COPY, problemMessage, suggestsUsb } from '../flash/copy.ts'
 import { busy, type FlashState } from '../flash/useFlash.ts'
 import './flash-panel.css'
@@ -11,6 +12,9 @@ type FlashPanelProps = {
   wireless: boolean
   /** False when this browser can't use USB (Safari, Firefox, phones). */
   usbAvailable: boolean
+  /** The board picked for USB installs, or null before one is picked. */
+  board: BoardId | null
+  onChooseBoard: (id: BoardId) => void
   onStart: () => void
   onStartUsb: () => void
   onSubmitWifi: (ssid: string, password: string) => void
@@ -26,14 +30,17 @@ export default function FlashPanel(props: FlashPanelProps) {
   const helperId = useId()
   const working = busy(state)
   const needsUsbFirst = !wireless && !usbAvailable
-  const disabled = working || blocked !== null || needsUsbFirst || state.phase === 'wifi-setup'
+  const needsBoard = !wireless && usbAvailable && props.board === null
+  const disabled = working || blocked !== null || needsUsbFirst || needsBoard || state.phase === 'wifi-setup'
 
   let helper: string = wireless ? FLASH_COPY.helperWifi : FLASH_COPY.helperUsb
   if (blocked) helper = blocked
   else if (needsUsbFirst) helper = FLASH_COPY.needsChrome
+  else if (needsBoard) helper = FLASH_COPY.pickBoard
 
   return (
     <section className="flash" aria-label="Put it on your screen">
+      {usbAvailable ? <BoardPicker board={props.board} disabled={working} onChoose={props.onChooseBoard} /> : null}
       <button
         type="button"
         className="button button-primary flash__button"
@@ -58,6 +65,41 @@ export default function FlashPanel(props: FlashPanelProps) {
       </p>
       <FlashStatus {...props} />
     </section>
+  )
+}
+
+function BoardPicker({
+  board,
+  disabled,
+  onChoose,
+}: {
+  board: BoardId | null
+  disabled: boolean
+  onChoose: (id: BoardId) => void
+}) {
+  const helperId = useId()
+  return (
+    <fieldset className="flash__boards" aria-describedby={helperId} disabled={disabled}>
+      <legend>{FLASH_COPY.boardHeading}</legend>
+      <p id={helperId} className="helper">
+        {FLASH_COPY.boardHelper}
+      </p>
+      {boards.map((option) => (
+        <label key={option.id} className="flash__board">
+          <input
+            type="radio"
+            name="esper-board"
+            value={option.id}
+            checked={board === option.id}
+            onChange={() => onChoose(option.id)}
+          />
+          <span>
+            <strong>{option.title}</strong>
+            <span className="helper">{option.detail}</span>
+          </span>
+        </label>
+      ))}
+    </fieldset>
   )
 }
 

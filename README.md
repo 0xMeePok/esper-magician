@@ -21,7 +21,7 @@ In the browser you can:
 
 What gets sent is always made for the screen: a baseline JPEG, or a GIF, no bigger than 170×320. A compressed choice is sent exactly as previewed. Anything else (an upload that fits, an example, the Info card drawn on a canvas) goes through the same compressor at the lightest strength that fits. Nothing is uploaded to a server.
 
-The firmware the site installs lives in `public/firmware/esper-1.9/`, with a manifest the site checks every download against. Rebuild it with `firmware/tools/build_web.sh` after changing the firmware. See [firmware/README.md](firmware/README.md).
+The firmware the site installs lives in `public/firmware/esper-1.9/<board>/`, one build per ESP32 board (38-pin and 30-pin DevKit), each with an ESP Web Tools-style manifest the site checks every download against. The site asks which board the screen is wired to before the first USB install, and shows the screen's serial output live, with what it reports about the picture. Rebuild it with `firmware/tools/build_web.sh` after changing the firmware. See [firmware/README.md](firmware/README.md).
 
 ## Install
 

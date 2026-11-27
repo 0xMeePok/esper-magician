@@ -1,5 +1,20 @@
 menu "ESPER screen"
 
+    choice ESPER_BOARD
+        prompt "ESP32 board the screen is wired to"
+        default ESPER_BOARD_DEVKIT_38
+        help
+            The pins for the screen's backlight (BLK) and the button differ
+            between boards. Pick the one you wired; firmware/README.md has both
+            wirings.
+
+        config ESPER_BOARD_DEVKIT_38
+            bool "ESP32 DevKit 38-pin (BLK on GPIO 32, button on GPIO 33)"
+
+        config ESPER_BOARD_DEVKIT_30
+            bool "ESP32 DevKit 30-pin USB-C (BLK on GPIO 17, button on GPIO 16)"
+    endchoice
+
     config ESPER_SCREEN_PIXEL_CLOCK_MHZ
         int "SPI clock for the screen (MHz)"
         range 10 80

@@ -1,5 +1,6 @@
-import type { FlashPart } from './firmware.ts'
+import type { Firmware } from './firmware.ts'
 import { encodeRpc, IMPROV_COMMAND, IMPROV_ERROR, IMPROV_STATE, ImprovParser, type ImprovPacket } from './improv.ts'
+import { md5Hex } from './md5.ts'
 
 /** USB-to-serial chips found on ESP32 boards. The ESPER DevKit uses a CP2102. */
 export const USB_FILTERS: SerialPortFilter[] = [
@@ -12,7 +13,7 @@ export const USB_FILTERS: SerialPortFilter[] = [
 const FLASH_BAUD = 460800
 const IMPROV_BAUD = 115200
 
-export type UsbProblem = 'busy' | 'no-response' | 'wrong-chip' | 'unplugged'
+export type UsbProblem = 'busy' | 'no-response' | 'wrong-chip' | 'unplugged' | 'verify-failed'
 
 export class UsbError extends Error {
   readonly problem: UsbProblem
@@ -49,19 +50,32 @@ function describe(error: unknown): string {
   return error instanceof Error ? `${error.name}: ${error.message}` : String(error)
 }
 
+function chipName(name: string): string {
+  return name.toUpperCase().replace(/[^A-Z0-9]/g, '')
+}
+
 /**
- * Writes the parts with esptool-js (Espressif's flasher, loaded on demand), then restarts the
- * screen. `onProgress` gets 0–1 across all parts.
+ * Writes the parts with esptool-js (Espressif's flasher, loaded on demand). Each part is checked
+ * against the MD5 the ESP32 works out from its flash afterwards. esptool-js's own messages go to
+ * `onLog`. The screen stays in the flasher until `ImprovLink.open` restarts it, so its whole boot
+ * log can be read. `onProgress` gets 0–1 across all parts.
  */
 export async function writeOverUsb(
   port: SerialPort,
-  parts: FlashPart[],
+  firmware: Pick<Firmware, 'chipFamily' | 'parts'>,
   onProgress: (fraction: number) => void,
+  onLog: (text: string) => void = () => {},
 ): Promise<void> {
   const { ESPLoader, Transport } = await import('esptool-js')
   const transport = new Transport(port, false)
+  const parts = firmware.parts
   try {
-    const loader = new ESPLoader({ transport, baudrate: FLASH_BAUD, romBaudrate: IMPROV_BAUD })
+    const loader = new ESPLoader({
+      transport,
+      baudrate: FLASH_BAUD,
+      romBaudrate: IMPROV_BAUD,
+      terminal: { clean: () => {}, write: onLog, writeLine: (line) => onLog(`${line}\n`) },
+    })
     try {
       await loader.main()
     } catch (error) {
@@ -70,35 +84,54 @@ export async function writeOverUsb(
       if (/disconnect|lost|NotFoundError/i.test(text)) throw new UsbError('unplugged', text)
       throw new UsbError('no-response', text)
     }
-    if (loader.chip.CHIP_NAME !== 'ESP32') {
+    if (chipName(loader.chip.CHIP_NAME) !== chipName(firmware.chipFamily)) {
       throw new UsbError('wrong-chip', loader.chip.CHIP_NAME)
     }
     const total = parts.reduce((sum, part) => sum + part.data.length, 0)
     const before = parts.map((_, index) =>
       parts.slice(0, index).reduce((sum, part) => sum + part.data.length, 0),
     )
-    await loader.writeFlash({
-      fileArray: parts,
-      flashMode: 'keep',
-      flashFreq: 'keep',
-      flashSize: 'keep',
-      eraseAll: false,
-      compress: true,
-      reportProgress: (index, written, size) => {
-        const part = parts[index]?.data.length ?? size
-        onProgress((before[index]! + (written / size) * part) / total)
-      },
-    })
+    try {
+      await loader.writeFlash({
+        fileArray: parts,
+        flashMode: 'keep',
+        flashFreq: 'keep',
+        flashSize: 'keep',
+        eraseAll: false,
+        compress: true,
+        calculateMD5Hash: md5Hex,
+        reportProgress: (index, written, size) => {
+          const part = parts[index]?.data.length ?? size
+          onProgress((before[index]! + (written / size) * part) / total)
+        },
+      })
+    } catch (error) {
+      const text = describe(error)
+      if (/MD5/i.test(text)) throw new UsbError('verify-failed', text)
+      throw error
+    }
     onProgress(1)
-    await loader.after('hard_reset')
   } finally {
     await transport.disconnect().catch(() => {})
   }
 }
 
-/** Improv Serial over the screen's USB port, once the player is running. */
+export type LinkOptions = {
+  /** Everything the screen prints that isn't an Improv packet: its boot messages and logs. */
+  onText?: (bytes: Uint8Array) => void
+  /** Called once when the port goes away or is closed. */
+  onClose?: () => void
+  /** Restart the screen once listening, so its whole boot log is read. */
+  restart?: boolean
+}
+
+/**
+ * The screen's USB serial port at 115200 baud, once the player is running: Improv Serial for the
+ * Wi-Fi details, and the screen's own log output.
+ */
 export class ImprovLink {
   private readonly port: SerialPort
+  private readonly options: LinkOptions
   private reader: ReadableStreamDefaultReader<Uint8Array> | null = null
   private readonly parser = new ImprovParser()
   private waiters: Array<(packet: ImprovPacket) => void> = []
@@ -106,17 +139,26 @@ export class ImprovLink {
   state: number | null = null
   urls: string[] = []
 
-  private constructor(port: SerialPort) {
+  private constructor(port: SerialPort, options: LinkOptions) {
     this.port = port
+    this.options = options
   }
 
-  static async open(port: SerialPort): Promise<ImprovLink> {
+  static async open(port: SerialPort, options: LinkOptions = {}): Promise<ImprovLink> {
     await port.open({ baudRate: IMPROV_BAUD })
     // Leave EN and BOOT alone, so the screen keeps running.
     await port.setSignals({ dataTerminalReady: false, requestToSend: false })
-    const link = new ImprovLink(port)
+    const link = new ImprovLink(port, options)
     void link.readLoop()
+    if (options.restart) await link.restart()
     return link
+  }
+
+  /** Pulses EN through the board's auto-reset circuit, with BOOT left high: a normal start. */
+  async restart() {
+    await this.port.setSignals({ dataTerminalReady: false, requestToSend: true })
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    await this.port.setSignals({ dataTerminalReady: false, requestToSend: false })
   }
 
   private async readLoop() {
@@ -131,6 +173,8 @@ export class ImprovLink {
             if (packet.type === 'result' && packet.strings.length) this.urls = packet.strings
             for (const wake of this.waiters.splice(0)) wake(packet)
           }
+          const text = this.parser.takeText()
+          if (text.length) this.options.onText?.(text)
         }
       } catch {
         // The port went away or was closed; stop reading.
@@ -139,6 +183,7 @@ export class ImprovLink {
         this.reader.releaseLock()
       }
     }
+    this.options.onClose?.()
   }
 
   private async send(bytes: Uint8Array) {

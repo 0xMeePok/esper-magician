@@ -1,12 +1,14 @@
 import { useCallback, useRef, useState } from 'react'
+import { readBoard, saveBoard, type BoardId } from '../boards.ts'
 import type { Size } from '../crop.ts'
 import { flashLayout, partition } from '../flashLayout.ts'
 import { problemFor, type FlashProblem } from './copy.ts'
 import { prepareDeviceAsset, type FlashSource } from './deviceAsset.ts'
 import { deviceFromUrls, readKnownDevice, saveKnownDevice, type KnownDevice } from './deviceStore.ts'
 import { loadFirmware } from './firmware.ts'
-import { packMediaImage } from './mediaImage.ts'
-import { choosePort, hasWebSerial, ImprovLink, writeOverUsb } from './usb.ts'
+import { packMediaImage, readMediaHeader } from './mediaImage.ts'
+import { LineBuffer, MAX_LOG_LINES, type Expected, type LogLine } from './serialLog.ts'
+import { choosePort, hasWebSerial, ImprovLink, writeOverUsb, type LinkOptions } from './usb.ts'
 import { openScreenWindow, sendOverWifi } from './wifi.ts'
 
 export type FlashRoute = 'usb' | 'wifi'
@@ -27,7 +29,10 @@ export type FlashDriver = {
   choosePort: typeof choosePort
   loadFirmware: typeof loadFirmware
   writeOverUsb: typeof writeOverUsb
-  openImprov: (port: SerialPort) => Promise<Pick<ImprovLink, 'waitForPlayer' | 'joinWifi' | 'close'>>
+  openImprov: (
+    port: SerialPort,
+    options: LinkOptions,
+  ) => Promise<Pick<ImprovLink, 'waitForPlayer' | 'joinWifi' | 'restart' | 'close'>>
   openScreenWindow: typeof openScreenWindow
   sendOverWifi: typeof sendOverWifi
   prepareDeviceAsset: typeof prepareDeviceAsset
@@ -38,7 +43,7 @@ export const browserDriver: FlashDriver = {
   choosePort,
   loadFirmware,
   writeOverUsb,
-  openImprov: (port) => ImprovLink.open(port),
+  openImprov: (port, options) => ImprovLink.open(port, options),
   openScreenWindow,
   sendOverWifi,
   prepareDeviceAsset,
@@ -65,8 +70,39 @@ type Options = {
 export function useFlash({ screen, budget, source }: Options) {
   const [state, setState] = useState<FlashState>({ phase: 'idle' })
   const [device, setDevice] = useState<KnownDevice | null>(() => readKnownDevice())
+  const [board, setBoard] = useState<BoardId | null>(() => readBoard())
+  const [log, setLog] = useState<LogLine[]>([])
+  const [expected, setExpected] = useState<Expected | null>(null)
+  const [monitoring, setMonitoring] = useState(false)
   const link = useRef<Awaited<ReturnType<FlashDriver['openImprov']>> | null>(null)
   const running = useRef(false)
+
+  const addLog = useCallback((source: LogLine['source'], lines: string[]) => {
+    if (lines.length) setLog((all) => [...all, ...lines.map((text) => ({ source, text }))].slice(-MAX_LOG_LINES))
+  }, [])
+
+  /** Opens the screen's serial port for Improv and its log. Restarting reads the whole boot log. */
+  async function openLink(driver: FlashDriver, port: SerialPort, restart: boolean) {
+    const lines = new LineBuffer()
+    const opened = await driver.openImprov(port, {
+      restart,
+      onText: (bytes) => addLog('board', lines.push(bytes)),
+      onClose: () => {
+        if (link.current === opened) {
+          link.current = null
+          setMonitoring(false)
+        }
+      },
+    })
+    link.current = opened
+    setMonitoring(true)
+    return opened
+  }
+
+  function chooseBoard(id: BoardId) {
+    saveBoard(id)
+    setBoard(id)
+  }
 
   const fail = useCallback((route: FlashRoute, error: unknown) => {
     setState({ phase: 'error', route, ...problemFor(error) })
@@ -83,12 +119,16 @@ export function useFlash({ screen, budget, source }: Options) {
 
   async function prepareImage(driver: FlashDriver): Promise<Uint8Array> {
     const asset = await driver.prepareDeviceAsset(await source(), screen, budget)
-    return packMediaImage(asset.kind, asset.bytes, screen)
+    const image = packMediaImage(asset.kind, asset.bytes, screen)
+    const header = readMediaHeader(image)
+    if (header) setExpected({ board, crc32: header.crc32, length: header.length })
+    return image
   }
 
   async function closeLink() {
     const open = link.current
     link.current = null
+    setMonitoring(false)
     await open?.close().catch(() => {})
   }
 
@@ -97,6 +137,10 @@ export function useFlash({ screen, budget, source }: Options) {
     const driver = activeDriver
     if (!driver.hasWebSerial()) {
       setState({ phase: 'error', route: 'usb', problem: 'no-serial' })
+      return
+    }
+    if (!board) {
+      setState({ phase: 'error', route: 'usb', problem: 'no-board' })
       return
     }
     let port: SerialPort | null
@@ -110,31 +154,61 @@ export function useFlash({ screen, budget, source }: Options) {
       setState({ phase: 'idle' }) // the device list was closed
       return
     }
+    // The serial monitor may have the port open; the flasher needs it.
+    await closeLink()
     setState({ phase: 'preparing', route: 'usb' })
+    setLog([])
     let written = false
     try {
-      const [image, firmware] = await Promise.all([prepareImage(driver), driver.loadFirmware()])
+      const [image, firmware] = await Promise.all([prepareImage(driver), driver.loadFirmware(board)])
       const media = partition(flashLayout(), 'media').offset
       setState({ phase: 'sending', route: 'usb', fraction: 0 })
-      await driver.writeOverUsb(port, [...firmware.parts, { data: image, address: media }], (fraction) =>
-        setState({ phase: 'sending', route: 'usb', fraction }),
+      const esptool = new LineBuffer()
+      await driver.writeOverUsb(
+        port,
+        { chipFamily: firmware.chipFamily, parts: [...firmware.parts, { data: image, address: media }] },
+        (fraction) => setState({ phase: 'sending', route: 'usb', fraction }),
+        (text) => addLog('esptool', esptool.push(text)),
       )
       written = true
       setState({ phase: 'restarting' })
-      link.current = await driver.openImprov(port)
-      const urls = await link.current.waitForPlayer()
-      if (remember(urls)) {
-        await closeLink()
-        setState({ phase: 'done', route: 'usb', wifi: true })
-      } else {
-        setState({ phase: 'wifi-setup', failed: false })
-      }
+      // Restarts the screen out of the flasher and reads its boot log from the first line.
+      const open = await openLink(driver, port, true)
+      const urls = await open.waitForPlayer()
+      // The port stays open afterwards, so the log keeps coming until the person stops it.
+      if (remember(urls)) setState({ phase: 'done', route: 'usb', wifi: true })
+      else setState({ phase: 'wifi-setup', failed: false })
     } catch (error) {
-      await closeLink()
       // Once the picture is on the screen, a Wi-Fi hiccup doesn't undo it.
       if (written) setState({ phase: 'done', route: 'usb', wifi: false })
-      else fail('usb', error)
+      else {
+        await closeLink()
+        fail('usb', error)
+      }
     }
+  }
+
+  /** Shows the screen's serial output without installing anything. */
+  async function watchSerial() {
+    if (running.current) return
+    const driver = activeDriver
+    if (!driver.hasWebSerial()) return
+    running.current = true
+    try {
+      const port = await driver.choosePort()
+      if (!port) return
+      await closeLink()
+      setLog([])
+      await openLink(driver, port, false)
+    } catch (error) {
+      fail('usb', error)
+    } finally {
+      running.current = false
+    }
+  }
+
+  async function restartScreen() {
+    await link.current?.restart().catch(() => {})
   }
 
   /** Every time after: hand the picture to the screen's own page on the Wi-Fi. */
@@ -187,7 +261,6 @@ export function useFlash({ screen, budget, source }: Options) {
     try {
       const urls = await open.joinWifi(ssid, password)
       const found = remember(urls)
-      await closeLink()
       setState({ phase: 'done', route: 'usb', wifi: Boolean(found) })
     } catch {
       setState({ phase: 'wifi-setup', failed: true })
@@ -195,9 +268,24 @@ export function useFlash({ screen, budget, source }: Options) {
   }
 
   function skipWifi() {
-    void closeLink()
     setState({ phase: 'done', route: 'usb', wifi: false })
   }
 
-  return { state, device, usbAvailable: activeDriver.hasWebSerial(), start, startUsb, submitWifi, skipWifi }
+  return {
+    state,
+    device,
+    board,
+    chooseBoard,
+    log,
+    expected,
+    monitoring,
+    usbAvailable: activeDriver.hasWebSerial(),
+    start,
+    startUsb,
+    submitWifi,
+    skipWifi,
+    watchSerial: () => void watchSerial(),
+    restartScreen: () => void restartScreen(),
+    stopSerial: () => void closeLink(),
+  }
 }
