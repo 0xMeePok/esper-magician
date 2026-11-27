@@ -16,6 +16,7 @@
 #include "esp_ota_ops.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "logbuf.h"
 #include "media.h"
 #include "network.h"
 #include "nvs_flash.h"
@@ -92,6 +93,8 @@ static bool show_stored(uint32_t *hold_ms)
 
 void app_main(void)
 {
+    logbuf_start(); // so the website can read the log over Wi-Fi (GET /log)
+
     // NVS only holds the Wi-Fi details. If it can't be read (full, a newer
     // format, or left over from another flash layout), start it fresh: the
     // setup hotspot then asks for the Wi-Fi again.

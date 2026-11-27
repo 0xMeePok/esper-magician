@@ -55,12 +55,16 @@ export const FLASH_COPY = {
   pickBoard: 'Pick the board your screen is wired to first.',
   serialHeading: "Your screen's serial output",
   serialHelper:
-    "Read live from your screen's USB port at 115200 baud: esptool lines while installing, then the screen's own boot log.",
+    "Live from your screen: over USB from the very first line (with esptool's lines while installing), or over Wi-Fi once it's on your Wi-Fi (about its last 100 lines, then each new one).",
   serialChecksHeading: 'What the screen reported',
   serialChecksNote:
     "The ESP32 can only report what it sent: nothing is wired back from the screen, so it can't see the glass. If these are ticked but the screen stays dark, the problem is the wiring, power or the screen itself.",
   serialEmpty: 'Nothing received yet.',
-  serialWatch: 'Show serial output',
+  serialWatch: 'Show output over USB',
+  serialWatchWifi: 'Show log over Wi-Fi',
+  serialReadingWifi: 'Reading the log over Wi-Fi from',
+  serialWifiFailed:
+    "Couldn't read the log over Wi-Fi. The screen needs firmware 1.4.0 or newer (install it over USB once), and the browser has to let this site reach devices on your local network.",
   serialRestart: 'Restart screen',
   serialStop: 'Stop',
   serialListening: 'Listening to your screen…',

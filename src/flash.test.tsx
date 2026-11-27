@@ -43,6 +43,7 @@ type Fakes = {
   sendOverWifi?: FlashDriver['sendOverWifi']
   sendInPage?: FlashDriver['sendInPage']
   findScreen?: FlashDriver['findScreen']
+  readLog?: FlashDriver['readLog']
   /** What the fake screen prints once its port is opened, as a real one would. */
   boardOutput?: (sent: { crc32: number; length: number } | null) => string
 }
@@ -107,6 +108,12 @@ function fakeDriver(fakes: Fakes = {}): FlashDriver {
       record('openWindow')
       return { closed: false, close: () => record('closeWindow') } as unknown as Window
     },
+    readLog:
+      fakes.readLog ??
+      (async (_device, since) => {
+        record('readLog', since)
+        return { text: '', start: since, next: since }
+      }),
     findScreen:
       fakes.findScreen ??
       (async (url) => {
@@ -555,4 +562,63 @@ describe('put it on my screen (ASH-19)', () => {
     expect(readKnownDevice()).toMatchObject({ url: 'http://192.168.0.16/' })
     expect(wifiButton()?.getAttribute('aria-disabled')).toBeNull()
   })
+
+  it('reads the screen log over Wi-Fi after a Wi-Fi send, and checks the picture from it', async () => {
+    localStorage.setItem(DEVICE_STORAGE_KEY, JSON.stringify({ url: URLS[0], localUrl: null, savedAt: 1 }))
+    let sent: { crc32: number; length: number } | null = null
+    const chunks = (since: number) => {
+      const text = sent
+        ? [
+            'I (12021) media: GIF 170x302 at (0,9)',
+            `I (12021) media: JPEG, ${sent.length} bytes, CRC 0x${sent.crc32.toString(16).padStart(8, '0')} OK`,
+            'I (12131) media: drew JPEG 170x320 at (0,0)',
+            '',
+          ].join('\r\n')
+        : ''
+      return since === 0 ? { text, start: 0, next: text.length } : { text: '', start: since, next: since }
+    }
+    setFlashDriver(
+      fakeDriver({
+        sendInPage: async (_device, image) => {
+          const header = readMediaHeader(image)!
+          sent = { crc32: header.crc32, length: header.length }
+        },
+        readLog: async (_device, since) => chunks(since),
+      }),
+    )
+    const container = await mount()
+    await upload(container)
+    await click(wifiButton())
+    await settle(60)
+
+    expect(document.querySelector('.serial')?.textContent).toContain(`${FLASH_COPY.serialReadingWifi} ${URLS[0]}`)
+    await click(document.querySelector('input[name="serial-view"][value="all"]'))
+    expect(document.querySelector('.serial__log')?.textContent).toContain('media: JPEG')
+    const checks = [...document.querySelectorAll('.serial__check')].map((item) => item.textContent).join(' ')
+    expect(checks).toContain('Picture matches what this site sent')
+
+    await click(button(FLASH_COPY.serialStop))
+    expect(button(FLASH_COPY.serialWatchWifi)).toBeTruthy()
+  })
+
+  it('says when lines were missed, and stops after misses in a row', async () => {
+    localStorage.setItem(DEVICE_STORAGE_KEY, JSON.stringify({ url: URLS[0], localUrl: null, savedAt: 1 }))
+    let calls = 0
+    setFlashDriver(
+      fakeDriver({
+        readLog: async (_device, since) => {
+          calls++
+          if (calls === 1) return { text: 'I (1) network: on Wi-Fi at http://192.168.0.16/ (also http://esper-49f5c0.local/)\r\n', start: 0, next: 100 }
+          if (calls === 2) return { text: 'I (9) setup: hotspot off\r\n', start: since + 500, next: since + 530 }
+          throw new WifiError('unreachable')
+        },
+      }),
+    )
+    await mount()
+    await click(button(FLASH_COPY.serialWatchWifi))
+    await settle(1200)
+    expect(document.querySelector('.serial__log')?.textContent).toContain('[note] Some lines were missed')
+    await settle(3500)
+    expect(document.querySelector('[role="alert"]')?.textContent).toBe(FLASH_COPY.serialWifiFailed)
+  }, 10000)
 })

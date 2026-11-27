@@ -77,6 +77,10 @@
   color: #9fb4c7;
 }
 
+.serial__line--note {
+  color: #e0c36a;
+}
+
 .serial__actions {
   display: flex;
   flex-wrap: wrap;

@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { FLASH_COPY } from '../flash/copy.ts'
+import type { WifiLogState } from '../flash/useFlash.ts'
 import {
   checkBoardLog,
   isWifiLine,
@@ -21,6 +22,11 @@ type SerialPanelProps = {
   busy: boolean
   /** The address Wi-Fi sends go to, if this browser knows one. */
   knownUrl: string | null
+  /** False when this browser can't use USB. */
+  usbAvailable: boolean
+  wifiLog: WifiLogState
+  onWatchWifi: () => void
+  onStopWifi: () => void
   /** Makes Wi-Fi sends go to the screen at these addresses. */
   onUseScreen: (url: string, localUrl: string | null) => void
   onWatch: () => void
@@ -112,7 +118,7 @@ export default function SerialPanel(props: SerialPanelProps) {
         {shown.length
           ? shown.map((line, index) => (
               <span key={index} className={`serial__line serial__line--${line.source}`}>
-                {line.source === 'esptool' ? '[esptool] ' : ''}
+                {line.source === 'esptool' ? '[esptool] ' : line.source === 'note' ? '[note] ' : ''}
                 {line.text}
                 {'\n'}
               </span>
@@ -124,8 +130,23 @@ export default function SerialPanel(props: SerialPanelProps) {
               : FLASH_COPY.serialEmpty}
       </pre>
 
+      {props.wifiLog === 'on' && props.knownUrl ? (
+        <p className="helper">
+          {FLASH_COPY.serialReadingWifi} <code>{props.knownUrl}</code>
+        </p>
+      ) : null}
+      {props.wifiLog === 'failed' ? (
+        <p className="board-error" role="alert">
+          {FLASH_COPY.serialWifiFailed}
+        </p>
+      ) : null}
+
       <div className="serial__actions">
-        {monitoring ? (
+        {props.wifiLog === 'on' ? (
+          <button type="button" className="button button-file" onClick={props.onStopWifi}>
+            {FLASH_COPY.serialStop}
+          </button>
+        ) : monitoring ? (
           <>
             <button type="button" className="button button-file" onClick={onRestart} disabled={busy}>
               {FLASH_COPY.serialRestart}
@@ -135,9 +156,18 @@ export default function SerialPanel(props: SerialPanelProps) {
             </button>
           </>
         ) : (
-          <button type="button" className="button button-file" onClick={onWatch} disabled={busy}>
-            {FLASH_COPY.serialWatch}
-          </button>
+          <>
+            {props.knownUrl ? (
+              <button type="button" className="button button-file" onClick={props.onWatchWifi} disabled={busy}>
+                {FLASH_COPY.serialWatchWifi}
+              </button>
+            ) : null}
+            {props.usbAvailable ? (
+              <button type="button" className="button button-file" onClick={onWatch} disabled={busy}>
+                {FLASH_COPY.serialWatch}
+              </button>
+            ) : null}
+          </>
         )}
       </div>
     </section>

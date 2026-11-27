@@ -8,6 +8,7 @@
 #include "esp_check.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
+#include "logbuf.h"
 #include "media.h"
 #include "network.h"
 #include "screen.h"
@@ -83,6 +84,7 @@ static void allow_site(httpd_req_t *req, char *buf, size_t size)
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", buf);
     httpd_resp_set_hdr(req, "Vary", "Origin");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Private-Network", "true");
+    httpd_resp_set_hdr(req, "Access-Control-Expose-Headers", "X-Log-Start, X-Log-Next");
 }
 
 // The browser's check before a POST from another origin.
@@ -119,6 +121,36 @@ static esp_err_t page(httpd_req_t *req)
         return setup_page(req);
     }
     return send_html(req, receiver_html_start, receiver_html_end);
+}
+
+// The log since ?since=N (a running byte count), as plain text. X-Log-Start
+// says where the text really starts (later than N if older lines are gone), and
+// X-Log-Next is what to ask for next time.
+static esp_err_t log_text(httpd_req_t *req)
+{
+    char origin[96], query[32], value[16];
+    allow_site(req, origin, sizeof(origin));
+    uint32_t since = 0;
+    if (httpd_req_get_url_query_str(req, query, sizeof(query)) == ESP_OK &&
+        httpd_query_key_value(query, "since", value, sizeof(value)) == ESP_OK) {
+        since = (uint32_t)strtoul(value, NULL, 10);
+    }
+    char *text = malloc(8192);
+    if (!text) {
+        return httpd_resp_send_500(req);
+    }
+    uint32_t start = 0;
+    size_t n = logbuf_read(since, &start, text, 8192);
+    char start_hdr[12], next_hdr[12];
+    snprintf(start_hdr, sizeof(start_hdr), "%lu", (unsigned long)start);
+    snprintf(next_hdr, sizeof(next_hdr), "%lu", (unsigned long)(start + n));
+    httpd_resp_set_type(req, "text/plain; charset=utf-8");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    httpd_resp_set_hdr(req, "X-Log-Start", start_hdr);
+    httpd_resp_set_hdr(req, "X-Log-Next", next_hdr);
+    esp_err_t err = httpd_resp_send(req, text, n);
+    free(text);
+    return err;
 }
 
 // ---- Setup hotspot ----
@@ -352,6 +384,8 @@ esp_err_t web_start(void)
         {.uri = "/scan", .method = HTTP_GET, .handler = scan},
         {.uri = "/wifi", .method = HTTP_POST, .handler = wifi_details},
         {.uri = "/status", .method = HTTP_GET, .handler = setup_status},
+        {.uri = "/log", .method = HTTP_GET, .handler = log_text},
+        {.uri = "/log", .method = HTTP_OPTIONS, .handler = preflight},
     };
     for (size_t i = 0; i < sizeof(routes) / sizeof(routes[0]); i++) {
         ESP_RETURN_ON_ERROR(httpd_register_uri_handler(server, &routes[i]), TAG, "route");

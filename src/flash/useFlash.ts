@@ -10,7 +10,7 @@ import { packMediaImage, readMediaHeader } from './mediaImage.ts'
 import { readOnScreen, reconcileOnScreen, saveOnScreen, type OnScreen } from './onScreen.ts'
 import { LineBuffer, MAX_LOG_LINES, reportedPicture, type Expected, type LogLine } from './serialLog.ts'
 import { choosePort, hasWebSerial, ImprovLink, writeOverUsb, type LinkOptions } from './usb.ts'
-import { findScreen, openScreenWindow, screenAddress, sendInPage, sendOverWifi, WifiError } from './wifi.ts'
+import { findScreen, openScreenWindow, readLog, screenAddress, sendInPage, sendOverWifi, WifiError } from './wifi.ts'
 
 export type FlashRoute = 'usb' | 'wifi'
 
@@ -37,6 +37,7 @@ export type FlashDriver = {
   ) => Promise<Pick<ImprovLink, 'waitForPlayer' | 'joinWifi' | 'restart' | 'close'>>
   sendInPage: typeof sendInPage
   findScreen: typeof findScreen
+  readLog: typeof readLog
   openScreenWindow: typeof openScreenWindow
   sendOverWifi: typeof sendOverWifi
   prepareDeviceAsset: typeof prepareDeviceAsset
@@ -50,6 +51,7 @@ export const browserDriver: FlashDriver = {
   openImprov: (port, options) => ImprovLink.open(port, options),
   sendInPage,
   findScreen,
+  readLog,
   openScreenWindow,
   sendOverWifi,
   prepareDeviceAsset,
@@ -67,6 +69,13 @@ export type ConnectState =
   | { status: 'idle' }
   | { status: 'checking'; url: string }
   | { status: 'failed'; url: string | null; problem: 'bad-address' | 'unreachable' | 'other-screen' }
+
+/** Reading the screen's log over Wi-Fi. */
+export type WifiLogState = 'off' | 'on' | 'failed'
+
+/** How often the log is read over Wi-Fi, and how many misses in a row stop it. */
+const WIFI_LOG_EVERY_MS = 1000
+const WIFI_LOG_MISSES = 3
 
 export function busy(state: FlashState): boolean {
   return state.phase === 'preparing' || state.phase === 'sending' || state.phase === 'restarting' || state.phase === 'joining'
@@ -89,6 +98,8 @@ export function useFlash({ screen, budget, source, identity }: Options) {
   const [expected, setExpected] = useState<Expected | null>(null)
   const [monitoring, setMonitoring] = useState(false)
   const [connect, setConnect] = useState<ConnectState>({ status: 'idle' })
+  const [wifiLog, setWifiLog] = useState<WifiLogState>('off')
+  const wifiLogRun = useRef(0) // bumped to stop the current reading loop
   const [onScreen, setOnScreenState] = useState<OnScreen | null>(() => readOnScreen())
   /** The picture being sent, until it is on the screen. */
   const pending = useRef<OnScreen | null>(null)
@@ -132,6 +143,54 @@ export function useFlash({ screen, budget, source, identity }: Options) {
       return next
     })
   }, [log])
+
+  function stopWifiLog() {
+    wifiLogRun.current++
+    setWifiLog('off')
+  }
+
+  /**
+   * Reads the screen's log over Wi-Fi every second: first what it still holds (about the last 100
+   * lines), then each new line. Stops after a few misses in a row.
+   */
+  function startWifiLog(known: KnownDevice | null = readKnownDevice()) {
+    if (!known) return
+    const run = ++wifiLogRun.current
+    const lines = new LineBuffer()
+    let since = 0
+    let misses = 0
+    setLog([])
+    setWifiLog('on')
+    const step = async () => {
+      if (run !== wifiLogRun.current) return
+      try {
+        const chunk = await activeDriver.readLog(known, since)
+        if (run !== wifiLogRun.current) return
+        if (since > 0 && chunk.start > since) {
+          addLog('note', ['Some lines were missed: the screen only keeps its last 8 KB of log.'])
+        }
+        addLog('board', lines.push(chunk.text))
+        since = chunk.next
+        misses = 0
+      } catch {
+        if (run !== wifiLogRun.current) return
+        if (++misses >= WIFI_LOG_MISSES) {
+          setWifiLog('failed')
+          return
+        }
+      }
+      setTimeout(() => void step(), WIFI_LOG_EVERY_MS)
+    }
+    void step()
+  }
+
+  // Stop reading when the page goes.
+  useEffect(
+    () => () => {
+      wifiLogRun.current++
+    },
+    [],
+  )
 
   /** The screen accepted the picture: its CRC on Wi-Fi, or the chip's MD5 over USB. */
   function markSent() {
@@ -197,7 +256,9 @@ export function useFlash({ screen, budget, source, identity }: Options) {
       setState({ phase: 'idle' }) // the device list was closed
       return
     }
-    // The serial monitor may have the port open; the flasher needs it.
+    // The serial monitor may have the port open; the flasher needs it. USB's own log replaces
+    // reading it over Wi-Fi.
+    stopWifiLog()
     await closeLink()
     setState({ phase: 'preparing', route: 'usb' })
     setLog([])
@@ -241,6 +302,7 @@ export function useFlash({ screen, budget, source, identity }: Options) {
     try {
       const port = await driver.choosePort()
       if (!port) return
+      stopWifiLog()
       await closeLink()
       setLog([])
       await openLink(driver, port, false)
@@ -265,6 +327,8 @@ export function useFlash({ screen, budget, source, identity }: Options) {
       await driver.sendInPage(known, image, screen)
       markSent()
       setState({ phase: 'done', route: 'wifi', wifi: true })
+      // Show what the screen says about it, unless USB is already showing its log.
+      if (!link.current) startWifiLog(known)
     } catch (error) {
       fail('wifi', error)
     }
@@ -292,6 +356,7 @@ export function useFlash({ screen, budget, source, identity }: Options) {
       )
       markSent()
       setState({ phase: 'done', route: 'wifi', wifi: true })
+      if (!link.current) startWifiLog(known)
     } catch (error) {
       if (!popup.closed) popup.close()
       fail('wifi', error)
@@ -393,6 +458,9 @@ export function useFlash({ screen, budget, source, identity }: Options) {
     dismiss,
     submitWifi,
     skipWifi,
+    wifiLog,
+    startWifiLog: () => startWifiLog(),
+    stopWifiLog,
     connect,
     connectScreen: (input: string) => void connectScreen(input),
     keepAddress,

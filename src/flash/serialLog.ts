@@ -3,9 +3,11 @@ import type { BoardId } from '../boards.ts'
 /**
  * What came over the screen's USB serial port, line by line. `esptool` lines are esptool-js
  * reporting what the chip answered while flashing; `board` lines are the screen's own output at
- * 115200 baud (ROM, bootloader and player logs). Nothing here is made up: every line was received.
+ * 115200 baud (ROM, bootloader and player logs) or over Wi-Fi (GET /log). `note` lines are the
+ * website's own remarks about the stream, such as a gap, and are labelled as such. Every `esptool`
+ * and `board` line was received.
  */
-export type LogLine = { source: 'esptool' | 'board'; text: string }
+export type LogLine = { source: 'esptool' | 'board' | 'note'; text: string }
 
 export const MAX_LOG_LINES = 2000
 
@@ -166,7 +168,7 @@ export function checkBoardLog(log: LogLine[], expected: Expected | null): Check[
 const WIFI_TAG = /^[IWE] \(\d+\) (?:wifi|wifi_init|phy_init|network|setup|esp_netif_handlers)[:\s]/
 
 export function isWifiLine(line: LogLine): boolean {
-  return line.source === 'board' && WIFI_TAG.test(line.text)
+  return line.source === 'note' || (line.source === 'board' && WIFI_TAG.test(line.text))
 }
 
 /**

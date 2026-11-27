@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { findScreen, screenAddress, sendInPage, WifiError } from './wifi.ts'
+import { findScreen, readLog, screenAddress, sendInPage, WifiError } from './wifi.ts'
 
 const DEVICE = { url: 'http://192.168.0.16/', localUrl: 'http://esper-49f5c0.local/', savedAt: 1 }
 const SCREEN = { width: 170, height: 320 }
@@ -84,5 +84,24 @@ describe('findScreen', () => {
     })
     vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('Failed to fetch'))))
     await expect(findScreen('http://192.168.0.16/', SCREEN)).rejects.toMatchObject({ problem: 'unreachable' })
+  })
+})
+
+describe('readLog', () => {
+  it('reads new log text and where to carry on from', async () => {
+    const fetch = vi.fn(
+      async () =>
+        new Response('I (1) setup: hotspot off\r\n', { headers: { 'X-Log-Start': '120', 'X-Log-Next': '146' } }),
+    )
+    vi.stubGlobal('fetch', fetch)
+    await expect(readLog(DEVICE, 100)).resolves.toEqual({ text: 'I (1) setup: hotspot off\r\n', start: 120, next: 146 })
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit & { targetAddressSpace?: string }]
+    expect(url).toBe('http://192.168.0.16/log?since=100')
+    expect(init.targetAddressSpace).toBe('local')
+  })
+
+  it('treats a screen without /log (older firmware) as unreachable', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('Not found', { status: 404 })))
+    await expect(readLog(DEVICE, 0)).rejects.toMatchObject({ problem: 'unreachable' })
   })
 })

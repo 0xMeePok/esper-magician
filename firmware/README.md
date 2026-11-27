@@ -103,7 +103,8 @@ main/
 ├── dns.c            answers every name with the screen while the setup hotspot is on
 ├── setup.html       the setup hotspot's page: pick a network, type the password
 ├── improv.c         Improv Serial (plain C, tested on a computer)
-├── web.c            GET /, GET /info, POST /media, CORS for the website
+├── web.c            GET /, /info, /log; POST /media; setup routes; CORS for the website
+├── logbuf.c         keeps the last 8 KB of log for GET /log (reading it over Wi-Fi)
 ├── receiver.html    the fallback page the website opens to hand over a picture
 └── test_card.c      the colour test card
 ```
@@ -172,6 +173,14 @@ I (…) esper: backlight on: showing the picture
 ```
 
 The website compares the CRC with the one it sent.
+
+Without a USB cable, the website can read the same lines over Wi-Fi ("Show
+log over Wi-Fi", and on its own after a Wi-Fi send): `GET /log?since=N`
+returns the log written since byte N from the last 8 KB the player keeps,
+with `X-Log-Start` (where the text really starts) and `X-Log-Next` (what to
+ask for next). It starts once the player is running, so the ROM and
+bootloader lines, and anything from before the screen joined the Wi-Fi, are
+still only on USB.
 
 ## Tests
 

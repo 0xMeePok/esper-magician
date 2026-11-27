@@ -42,6 +42,35 @@ async function askInfo(base: string, timeoutMs: number): Promise<ScreenInfo | nu
   }
 }
 
+export type LogChunk = { text: string; start: number; next: number }
+
+/**
+ * Reads the screen's log written since `since` (a running byte count), over Wi-Fi from this page
+ * (GET /log, firmware/main/logbuf.c, firmware 1.4.0 and newer). `start` is where the text really
+ * begins: later than `since` when older lines have been overwritten.
+ */
+export async function readLog(device: KnownDevice, since: number, timeoutMs = 8000): Promise<LogChunk> {
+  const urls = [device.url, device.localUrl].filter((url): url is string => Boolean(url))
+  for (const base of urls) {
+    try {
+      const response = await fetch(`${base}log?since=${since}`, {
+        ...LOCAL_NETWORK,
+        cache: 'no-store',
+        signal: AbortSignal.timeout(timeoutMs),
+      })
+      const start = Number(response.headers.get('X-Log-Start'))
+      const next = Number(response.headers.get('X-Log-Next'))
+      if (!response.ok || !response.headers.has('X-Log-Next') || !Number.isFinite(start) || !Number.isFinite(next)) {
+        continue
+      }
+      return { text: await response.text(), start, next }
+    } catch {
+      // Blocked, not there, or older firmware: try the next address.
+    }
+  }
+  throw new WifiError('unreachable')
+}
+
 /**
  * Turns what someone types into the screen's address: its hotspot name ("ESPER-49F5C0", which is
  * also its name on the Wi-Fi), "esper-49f5c0.local", an IP address, or a full http address.

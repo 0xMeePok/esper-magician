@@ -137,7 +137,7 @@ export default function App() {
               onSubmitWifi={(ssid, password) => void flash.submitWifi(ssid, password)}
               onSkipWifi={flash.skipWifi}
             />
-            {flash.usbAvailable ? (
+            {flash.usbAvailable || flash.device ? (
               <SerialPanel
                 log={flash.log}
                 expected={flash.expected}
@@ -148,6 +148,10 @@ export default function App() {
                 onStop={flash.stopSerial}
                 knownUrl={flash.device?.url ?? null}
                 onUseScreen={flash.useScreen}
+                usbAvailable={flash.usbAvailable}
+                wifiLog={flash.wifiLog}
+                onWatchWifi={flash.startWifiLog}
+                onStopWifi={flash.stopWifiLog}
               />
             ) : null}
           </div>
