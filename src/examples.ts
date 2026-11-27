@@ -19,6 +19,7 @@ export type LayoutExample = ExampleDetails & {
 export type Example = BitmapExample | LayoutExample
 
 export const ON_THE_SCREEN = 'On the screen'
+export const SELECTED = 'Selected'
 
 export const INFO_CARD_TITLE = 'Today'
 export const INFO_CARD_LINE = 'Sunny and warm'

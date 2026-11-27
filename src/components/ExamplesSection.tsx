@@ -1,12 +1,15 @@
 import { useRef, useState, type KeyboardEvent } from 'react'
-import { examples, nextExampleIndex, ON_THE_SCREEN } from '../examples.ts'
+import { examples, nextExampleIndex, ON_THE_SCREEN, SELECTED } from '../examples.ts'
+import type { ItemStatus } from '../flash/onScreen.ts'
 
 type ExamplesSectionProps = {
   selectedId: string | null
+  /** How each example is marked: on the screen, selected to send, or neither. */
+  statusFor: (id: string) => ItemStatus
   onSelect: (id: string) => void
 }
 
-export default function ExamplesSection({ selectedId, onSelect }: ExamplesSectionProps) {
+export default function ExamplesSection({ selectedId, statusFor, onSelect }: ExamplesSectionProps) {
   const [focusIndex, setFocusIndex] = useState(0)
   const rows = useRef<Array<HTMLDivElement | null>>([])
 
@@ -48,12 +51,14 @@ export default function ExamplesSection({ selectedId, onSelect }: ExamplesSectio
       >
         {examples.map((example, index) => {
           const selected = example.id === selectedId
+          const status = statusFor(example.id)
           return (
             <div
               key={example.id}
               className="example-row"
               role="radio"
               aria-checked={selected}
+              data-status={status ?? undefined}
               tabIndex={index === focusIndex ? 0 : -1}
               ref={(node) => {
                 rows.current[index] = node
@@ -73,7 +78,10 @@ export default function ExamplesSection({ selectedId, onSelect }: ExamplesSectio
               <span className="example-copy">
                 <span className="example-title">{example.title}</span>
                 <span className="example-description">{example.description}</span>
-                {selected ? <span className="example-status">{ON_THE_SCREEN}</span> : null}
+                {status === 'on-screen' ? <span className="example-status">{ON_THE_SCREEN}</span> : null}
+                {status === 'selected' ? (
+                  <span className="example-status example-status--selected">{SELECTED}</span>
+                ) : null}
               </span>
             </div>
           )

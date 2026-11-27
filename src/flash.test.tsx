@@ -391,4 +391,29 @@ describe('put it on my screen (ASH-19)', () => {
     const bad = document.querySelector('.serial__check--bad')?.textContent
     expect(bad).toContain('Built for devkit-38, not devkit-30')
   })
+
+  it('marks an upload "Selected" until it is flashed, then "On the screen" while the board agrees', async () => {
+    let report = (sent: { crc32: number; length: number } | null) =>
+      `I (520) media: JPEG, ${sent!.length} bytes, CRC 0x${sent!.crc32.toString(16).padStart(8, '0')} OK\r\n`
+    setFlashDriver(fakeDriver({ boardOutput: (sent) => report(sent) }))
+    const container = await mount()
+    await upload(container)
+    await settle(60)
+    const tile = () => container.querySelector('.upload-tile')?.getAttribute('aria-label')
+    expect(tile()).toBe('cat.png, picture, Selected')
+    expect(container.querySelector('.upload-scrim--selected')?.textContent).toBe('Selected')
+
+    await click(flashButton())
+    await settle(60)
+    expect(tile()).toBe('cat.png, picture, On the screen')
+    expect(container.querySelector('.upload-scrim--selected')).toBeNull()
+
+    // The board now reports a picture this browser didn't send: nothing is marked.
+    report = () => 'I (520) media: JPEG, 99 bytes, CRC 0xdeadbeef OK\r\n'
+    await click([...document.querySelectorAll('button')].find((button) => button.textContent === FLASH_COPY.wifiSkip))
+    await click(flashButton())
+    await settle(60)
+    expect(tile()).toBe('cat.png, picture, Selected')
+    expect(container.textContent).not.toContain('On the screen')
+  })
 })

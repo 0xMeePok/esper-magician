@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { readBoard, saveBoard, type BoardId } from '../boards.ts'
 import type { Size } from '../crop.ts'
 import { flashLayout, partition } from '../flashLayout.ts'
@@ -7,7 +7,8 @@ import { prepareDeviceAsset, type FlashSource } from './deviceAsset.ts'
 import { deviceFromUrls, readKnownDevice, saveKnownDevice, type KnownDevice } from './deviceStore.ts'
 import { loadFirmware } from './firmware.ts'
 import { packMediaImage, readMediaHeader } from './mediaImage.ts'
-import { LineBuffer, MAX_LOG_LINES, type Expected, type LogLine } from './serialLog.ts'
+import { readOnScreen, reconcileOnScreen, saveOnScreen, type OnScreen } from './onScreen.ts'
+import { LineBuffer, MAX_LOG_LINES, reportedPicture, type Expected, type LogLine } from './serialLog.ts'
 import { choosePort, hasWebSerial, ImprovLink, writeOverUsb, type LinkOptions } from './usb.ts'
 import { openScreenWindow, sendOverWifi } from './wifi.ts'
 
@@ -65,15 +66,20 @@ type Options = {
   budget: number
   /** What to send, worked out when the button is clicked. */
   source: () => Promise<FlashSource>
+  /** Which item that is, to mark it "On the screen" once it gets there. */
+  identity: () => { item: string; version: string } | null
 }
 
-export function useFlash({ screen, budget, source }: Options) {
+export function useFlash({ screen, budget, source, identity }: Options) {
   const [state, setState] = useState<FlashState>({ phase: 'idle' })
   const [device, setDevice] = useState<KnownDevice | null>(() => readKnownDevice())
   const [board, setBoard] = useState<BoardId | null>(() => readBoard())
   const [log, setLog] = useState<LogLine[]>([])
   const [expected, setExpected] = useState<Expected | null>(null)
   const [monitoring, setMonitoring] = useState(false)
+  const [onScreen, setOnScreenState] = useState<OnScreen | null>(() => readOnScreen())
+  /** The picture being sent, until it is on the screen. */
+  const pending = useRef<OnScreen | null>(null)
   const link = useRef<Awaited<ReturnType<FlashDriver['openImprov']>> | null>(null)
   const running = useRef(false)
 
@@ -99,6 +105,27 @@ export function useFlash({ screen, budget, source }: Options) {
     return opened
   }
 
+  const setOnScreen = useCallback((value: OnScreen | null) => {
+    saveOnScreen(value)
+    setOnScreenState(value)
+  }, [])
+
+  // The screen's own log has the final say: it reports the CRC of the picture it stored.
+  useEffect(() => {
+    const reported = reportedPicture(log)
+    if (!reported) return
+    setOnScreenState((current) => {
+      const next = reconcileOnScreen(current, pending.current, reported)
+      if (next !== current) saveOnScreen(next)
+      return next
+    })
+  }, [log])
+
+  /** The screen accepted the picture: its CRC on Wi-Fi, or the chip's MD5 over USB. */
+  function markSent() {
+    if (pending.current) setOnScreen(pending.current)
+  }
+
   function chooseBoard(id: BoardId) {
     saveBoard(id)
     setBoard(id)
@@ -121,7 +148,11 @@ export function useFlash({ screen, budget, source }: Options) {
     const asset = await driver.prepareDeviceAsset(await source(), screen, budget)
     const image = packMediaImage(asset.kind, asset.bytes, screen)
     const header = readMediaHeader(image)
-    if (header) setExpected({ board, crc32: header.crc32, length: header.length })
+    if (header) {
+      setExpected({ board, crc32: header.crc32, length: header.length })
+      const which = identity()
+      pending.current = { item: which?.item ?? null, version: which?.version ?? '', crc32: header.crc32, length: header.length }
+    }
     return image
   }
 
@@ -171,6 +202,7 @@ export function useFlash({ screen, budget, source }: Options) {
         (text) => addLog('esptool', esptool.push(text)),
       )
       written = true
+      markSent()
       setState({ phase: 'restarting' })
       // Restarts the screen out of the flasher and reads its boot log from the first line.
       const open = await openLink(driver, port, true)
@@ -228,6 +260,7 @@ export function useFlash({ screen, budget, source }: Options) {
       await driver.sendOverWifi(popup, known, image, screen, (fraction) =>
         setState({ phase: 'sending', route: 'wifi', fraction }),
       )
+      markSent()
       setState({ phase: 'done', route: 'wifi', wifi: true })
     } catch (error) {
       if (!popup.closed) popup.close()
@@ -279,6 +312,7 @@ export function useFlash({ screen, budget, source }: Options) {
     log,
     expected,
     monitoring,
+    onScreen,
     usbAvailable: activeDriver.hasWebSerial(),
     start,
     startUsb,

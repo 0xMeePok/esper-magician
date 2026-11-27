@@ -30,6 +30,17 @@ describe('ImprovParser text', () => {
   })
 })
 
+describe('ImprovParser resync', () => {
+  it('finds a real packet after a garbled one', () => {
+    const parser = new ImprovParser()
+    const state = Uint8Array.from([...text('IMPROV'), 1, 0x01, 1, 0x04, 0, 0x0a])
+    state[10] = [...state.slice(0, 10)].reduce((sum, byte) => (sum + byte) & 0xff, 0)
+    // A header whose length byte was overwritten by log text, then the real packet.
+    const garbled = Uint8Array.from([...text('IMPROV'), 1, 0x01, 9, ...text('W (1) x'), ...state])
+    expect(parser.push(garbled)).toEqual([{ type: 'state', state: 0x04 }])
+  })
+})
+
 describe('LineBuffer', () => {
   it('joins chunks into lines and drops colour codes', () => {
     const lines = new LineBuffer()
@@ -55,6 +66,26 @@ describe('checkBoardLog', () => {
     )
     expect(checks.find((check) => check.id === 'picture')?.status).toBe('bad')
     expect(checks.find((check) => check.id === 'crash')?.status).toBe('bad')
+  })
+
+  it("doesn't keep old ticks once a Wi-Fi send fails and the test card shows", () => {
+    const lines = [
+      board('I (412) esper: ESPER player 1.1.1 on a 170x320 screen'),
+      board('I (413) esper: board devkit-30: 1.9-inch ST7789 on an ESP32 DevKit 30-pin, BLK GPIO 17, button GPIO 16'),
+      board('I (520) media: JPEG, 100 bytes, CRC 0x0000abcd OK'),
+      board('I (560) media: drew JPEG 170x320 at (0,0)'),
+      board('I (561) esper: backlight on: showing the picture'),
+      board('I (33111) wifi:state: run -> init (0x22c0)'),
+      board('W (33121) httpd_txrx: httpd_sock_err: error in recv : 113'),
+      board('W (33121) web: picture not saved: ESP_FAIL'),
+      board('I (33121) esper: no picture yet: showing the test card'),
+    ]
+    const checks = Object.fromEntries(checkBoardLog(lines, null).map((check) => [check.id, check]))
+    expect(checks.picture?.status).toBe('bad')
+    expect(checks.drawn?.status).toBe('bad')
+    expect(checks.showing).toMatchObject({ label: 'Should be showing the test card', status: 'bad' })
+    // The pin was set high at start-up and stays high; that's all the ESP32 can say about it.
+    expect(checks.backlight).toMatchObject({ label: 'Backlight pin set high (GPIO 17)', status: 'ok' })
   })
 
   it('compares the CRC with what was sent', () => {

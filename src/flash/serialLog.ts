@@ -45,6 +45,23 @@ function lastIndex(lines: string[], pattern: RegExp): number {
   return -1
 }
 
+// The screen's report on the picture it stored (main.c and media.c), or on why there isn't one.
+const STORED = /(JPEG|GIF), (\d+) bytes, CRC 0x([0-9a-f]{8}) OK/
+const NO_PICTURE =
+  /picture is damaged|picture header is damaged|stored picture not usable|no picture yet|picture is for a|picture not saved/
+
+/** The newest thing the screen said about its stored picture, or null if it hasn't said. */
+export function reportedPicture(log: LogLine[]): { crc32: number; length: number } | 'none' | null {
+  for (let i = log.length - 1; i >= 0; i--) {
+    const line = log[i]!
+    if (line.source !== 'board') continue
+    const match = line.text.match(STORED)
+    if (match) return { crc32: parseInt(match[3]!, 16), length: Number(match[2]) }
+    if (NO_PICTURE.test(line.text)) return 'none'
+  }
+  return null
+}
+
 const hex = (value: number) => `0x${value.toString(16).padStart(8, '0')}`
 
 /**
@@ -76,12 +93,15 @@ export function checkBoardLog(log: LogLine[], expected: Expected | null): Check[
   }
 
   // A newer "picture" line wins over an older problem, and the other way round.
-  const stored = /(JPEG|GIF), (\d+) bytes, CRC 0x([0-9a-f]{8}) OK/
-  const damaged = /picture is damaged|picture header is damaged|stored picture not usable|no picture yet|picture is for a/
+  const stored = STORED
+  const damaged = NO_PICTURE
   const storedAt = lastIndex(lines, stored)
   const damagedAt = lastIndex(lines, damaged)
   if (damagedAt > storedAt) {
-    checks.push({ id: 'picture', label: 'Picture arrived intact', status: 'bad', detail: lines[damagedAt]!.trim() })
+    const line = lines[damagedAt]!.trim()
+    // An interrupted Wi-Fi send has already cleared the old picture, so the test card shows.
+    const label = /picture not saved/.test(line) ? "Picture didn't arrive" : 'Picture arrived intact'
+    checks.push({ id: 'picture', label, status: 'bad', detail: line })
   } else if (storedAt >= 0) {
     const match = lines[storedAt]!.match(stored)!
     const crc = parseInt(match[3]!, 16)
@@ -99,34 +119,40 @@ export function checkBoardLog(log: LogLine[], expected: Expected | null): Check[
     checks.push({ id: 'picture', label: 'Picture arrived intact', status: 'waiting' })
   }
 
+  // The ESP32 only writes to the screen (nothing is wired back), so this is as far as it can
+  // tell: every pixel went out over SPI. Whether the glass shows them, it can't see.
+  const sentLabel = 'Picture sent to the screen over SPI'
   const drawn = /drew JPEG (\d+)x(\d+)|GIF (\d+)x(\d+) at/
   const failed = /JPEG decode failed|GIF won't open|GIF frame failed/
   const drawnAt = lastIndex(lines, drawn)
   const failedAt = lastIndex(lines, failed)
   if (failedAt > drawnAt) {
-    checks.push({ id: 'drawn', label: 'Picture drawn on the screen', status: 'bad', detail: lines[failedAt]!.trim() })
-  } else if (drawnAt >= 0) {
+    checks.push({ id: 'drawn', label: sentLabel, status: 'bad', detail: lines[failedAt]!.trim() })
+  } else if (drawnAt >= 0 && drawnAt > damagedAt) {
     const match = lines[drawnAt]!.match(drawn)!
     checks.push({
       id: 'drawn',
-      label: 'Picture drawn on the screen',
+      label: sentLabel,
       status: 'ok',
       detail: `${match[1] ?? match[3]}×${match[2] ?? match[4]} pixels`,
     })
   } else {
-    checks.push({ id: 'drawn', label: 'Picture drawn on the screen', status: 'waiting' })
+    // Nothing drawn since the last picture problem: the screen is on the test card.
+    checks.push({ id: 'drawn', label: sentLabel, status: damagedAt >= 0 ? 'bad' : 'waiting' })
   }
 
-  const backlight = last(lines, /backlight on: showing (the picture|the test card)/)
+  // Only counts for the current start-up: the player logs it once, after drawing.
+  const bootAt = lastIndex(lines, /ESPER player \S+ on a/)
+  const backlightAt = lastIndex(lines, /backlight on: showing (the picture|the test card)/)
+  const pin = board ? `GPIO ${board[2]}` : 'the BLK pin'
   checks.push(
-    backlight
-      ? {
-          id: 'backlight',
-          label: backlight[1] === 'the picture' ? 'Backlight on, showing the picture' : 'Backlight on, showing the test card',
-          status: backlight[1] === 'the picture' ? 'ok' : 'bad',
-        }
-      : { id: 'backlight', label: 'Backlight on', status: 'waiting' },
+    backlightAt > bootAt
+      ? { id: 'backlight', label: `Backlight pin set high (${pin})`, status: 'ok' }
+      : { id: 'backlight', label: `Backlight pin set high (${pin})`, status: 'waiting' },
   )
+
+  const shows = damagedAt > Math.max(storedAt, drawnAt) || failedAt > drawnAt ? 'the test card' : drawnAt >= 0 ? 'the picture' : null
+  if (shows) checks.push({ id: 'showing', label: `Should be showing ${shows}`, status: shows === 'the picture' ? 'ok' : 'bad' })
 
   const crash = last(lines, /Brownout detector was triggered|Guru Meditation Error.*|abort\(\) was called.*|rst:0x[0-9a-f]+ \((?:TG\dWDT|RTCWDT|SW_CPU)[^)]*\)/)
   if (crash) checks.push({ id: 'crash', label: 'The screen crashed or lost power', status: 'bad', detail: crash[0] })

@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App.tsx'
+import type { ItemStatus } from './flash/onScreen.ts'
 import MyUploadsSection from './components/MyUploadsSection.tsx'
 import { QUOTA_MESSAGE, UNAVAILABLE_MESSAGE, type UploadTile } from './uploadList.ts'
 
@@ -104,6 +105,8 @@ describe('My uploads section', () => {
     document.body.append(container)
     root = createRoot(container)
     const props = {
+      // Nothing has been sent in these tests, so the picked tile reads "Selected".
+      statusFor: (id: string): ItemStatus => (id === (overrides.selectedId ?? null) ? 'selected' : null),
       phase: 'ready' as const,
       tiles: [] as UploadTile[],
       selectedId: null,
@@ -115,6 +118,7 @@ describe('My uploads section', () => {
       onDelete: vi.fn(async () => {}),
       ...overrides,
     }
+
     await act(async () => {
       root?.render(<MyUploadsSection {...props} />)
     })
@@ -167,9 +171,10 @@ describe('My uploads section', () => {
     expect(gifItem?.querySelector('img')).toBeNull()
     expect(gifItem?.textContent).toContain('GIF')
     expect(gif.container.querySelector('[aria-pressed="true"]')?.getAttribute('aria-label')).toBe(
-      'sunset.jpg, picture, On the screen',
+      'sunset.jpg, picture, Selected',
     )
-    expect(gif.container.textContent).toContain('On the screen')
+    expect(gif.container.textContent).toContain('Selected')
+    expect(gif.container.textContent).not.toContain('On the screen')
     await act(async () => root?.unmount())
     root = null
 
@@ -255,7 +260,7 @@ describe('saved uploads on the page', () => {
     await choose(container, new File([bytes], 'clip.gif', { type: 'image/gif' }))
 
     expect(labels(container)).toEqual([
-      'clip.gif, animation, On the screen',
+      'clip.gif, animation, Selected',
       'photo.webp, picture',
       'photo.jpg, picture',
       'photo.png, picture',
@@ -273,7 +278,7 @@ describe('saved uploads on the page', () => {
       await new Promise((resolve) => setTimeout(resolve, 20))
     })
     expect(container.querySelector('[aria-pressed="true"]')?.getAttribute('aria-label')).toBe(
-      'photo.png, picture, On the screen',
+      'photo.png, picture, Selected',
     )
     expect(container.querySelector('.viewport img')?.getAttribute('src')).toMatch(/^blob:/)
 

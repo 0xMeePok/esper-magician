@@ -104,7 +104,7 @@ describe('example picker (ASH-17)', () => {
     ])
     expect(examples.map((example) => example.kind)).toEqual(['still', 'animation', 'clock', 'card'])
 
-    const html = renderToStaticMarkup(<ExamplesSection selectedId={null} onSelect={() => {}} />)
+    const html = renderToStaticMarkup(<ExamplesSection selectedId={null} statusFor={() => null} onSelect={() => {}} />)
     expect(html.match(/role="radio"/g)).toHaveLength(4)
     expect(html.match(/tabindex="0"/g)).toHaveLength(1)
     expect(html.match(/width="64"/g)).toHaveLength(4)
@@ -276,7 +276,9 @@ describe('examples on the page', () => {
       })
       const selected = container.querySelector('[role="radio"][aria-checked="true"]')
       expect(selected?.textContent).toContain(example.title)
-      expect(selected?.textContent).toContain('On the screen')
+      // Picked, not sent: it reads "Selected" until it is flashed.
+      expect(selected?.textContent).toContain('Selected')
+      expect(selected?.textContent).not.toContain('On the screen')
 
       for (const id of ['1.9'] as const) {
         const screen = screenFor(id)

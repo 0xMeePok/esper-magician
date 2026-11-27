@@ -266,6 +266,24 @@ input {
   color: var(--color-accent);
 }
 
+/* Picked to send, not on the screen yet: yellow, so it reads apart from "On the screen". */
+.example-status--selected {
+  justify-self: start;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: #f5c542;
+  color: #3d2e00;
+  font-weight: 600;
+}
+
+.example-row[data-status='selected'] {
+  background: #fdf6dc;
+}
+
+.example-row[data-status='selected']::before {
+  background: #e0a800;
+}
+
 .upload-block {
   position: relative;
   display: flex;
@@ -563,6 +581,15 @@ input {
   padding: 2px 4px;
   background: rgb(15 118 110 / 90%);
   color: #fff;
+}
+
+.upload-scrim--selected {
+  background: rgb(245 197 66 / 95%);
+}
+
+.upload-scrim--selected .upload-on-screen {
+  color: #3d2e00;
+  font-weight: 600;
 }
 
 .upload-check {
