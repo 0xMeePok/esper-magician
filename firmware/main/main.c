@@ -1,6 +1,7 @@
 // ESPER player for the 1.9-inch ST7789 screen on an ESP32 DevKit.
 //
-// Shows the picture or GIF in the "media" partition. The website writes it
+// Shows the picture, GIF or text design in the "media" partition; a design's
+// text scrolls and blinks here on the screen (scene.c). The website writes it
 // over USB the first time, then over Wi-Fi: it hands the picture to a small
 // page this player serves on the home network (web.c).
 //
@@ -93,6 +94,7 @@ static bool show_stored(uint32_t *hold_ms)
         err = media_load_at(0);
     }
     if (err == ESP_OK && media_show(hold_ms) == ESP_OK) {
+        screen_brightness(media_brightness()); // a design may dim the screen
         return true;
     }
     if (err == ESP_ERR_NOT_FOUND) {
@@ -101,6 +103,7 @@ static bool show_stored(uint32_t *hold_ms)
         ESP_LOGW(TAG, "stored picture not usable (%s): showing the test card", esp_err_to_name(err));
     }
     test_card_draw();
+    screen_brightness(100);
     return false;
 }
 
@@ -175,6 +178,7 @@ void app_main(void)
             showing_card = !showing_card;
             if (showing_card || !picture) {
                 test_card_draw();
+                screen_brightness(100);
                 hold = 0;
             } else {
                 picture = show_stored(&hold);
@@ -194,6 +198,7 @@ void app_main(void)
                 picture = false;
                 hold = 0;
                 test_card_draw();
+                screen_brightness(100);
             }
         }
         media_unlock();

@@ -27,6 +27,15 @@ one over Wi-Fi:
   serves (`main/receiver.html`), which the website hands the picture to. The
   screen saves it to its `media` partition and shows it straight away.
 
+A text design from the website's Text page (media kind 3, see
+`main/scene_format.h`) is a background plus up to 32 sprites: pictures with
+see-through edges that the player moves and blinks itself, redrawing only what
+changed. The background is a colour, an exact picture, or a GIF that plays
+under the sprites. A picture background is copied into memory when there's
+room, since memory is much quicker to read than flash; a GIF background always
+is (about 108 KB). A design can also dim the screen: the backlight pin is
+driven with PWM (10 kHz), and pictures and the test card go back to full.
+
 Before anything has been sent, or if what's stored is damaged, the screen shows
 a colour test card. The button (GPIO 33, or 16 on the 30-pin board) switches between the picture and the
 test card. If several pictures are stored one after another (see below), the
@@ -99,6 +108,8 @@ main/
 ├── screen.c         ST7789 set-up and drawing (esp_lcd, double-buffered DMA)
 ├── media.c          the media partition: check, draw, receive
 ├── media_format.c   the header and CRC-32 (plain C, tested on a computer)
+├── scene.c          plays text designs: background, moving sprites, what to redraw
+├── scene_format.c   reads designs, motion and drawing (plain C, tested on a computer)
 ├── gif_decoder.c    streaming GIF decoder (plain C, tested on a computer)
 ├── network.c        Wi-Fi station, setup hotspot, mDNS name esper-xxxxxx.local, Improv over USB
 ├── dns.c            answers every name with the screen while the setup hotspot is on
@@ -113,6 +124,12 @@ main/
 JPEGs are decoded by the TJpgDec copy in the ESP32's ROM, which reads only
 baseline JPEGs; the website always sends baseline. GIFs are decoded row by row
 straight to the screen, so no full-frame buffer is needed.
+
+The drawing loops (`scene.c`, `scene_format.c`, `screen.c`, `gif_decoder.c`)
+are built with `-O2` rather than the project's size setting, and FreeRTOS
+ticks every millisecond so animation steps start on time. On the 30-pin board
+a scrolling LED line (about 18,000 pixels a step) redraws in about 20 ms; the
+screen's 40 MHz SPI link is the limit for big changes, about 0.4 µs a pixel.
 
 ## Build and flash by hand
 
@@ -195,9 +212,10 @@ still only on USB.
 
 ## Tests
 
-`npm test` at the top of the repo compiles `gif_decoder.c`, `media_format.c`
-and `improv.c` with your computer's C compiler (`test/host.c`,
-`test/improv_host.c`) and runs them on exactly what the website produces.
+`npm test` at the top of the repo compiles `gif_decoder.c`, `media_format.c`,
+`scene_format.c` and `improv.c` with your computer's C compiler (`test/host.c`,
+`test/scene_host.c`, `test/improv_host.c`) and runs them on exactly what the
+website produces.
 
 ## If the picture looks wrong
 

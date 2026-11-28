@@ -91,6 +91,7 @@ export type FlashProblem =
   | 'unplugged'
   | 'verify-failed'
   | 'no-board'
+  | 'no-port-list'
   | 'unreachable'
   | 'other-screen'
   | 'failed'
@@ -108,6 +109,8 @@ const MESSAGES: Record<FlashProblem, string> = {
   'verify-failed':
     "What's in your screen's memory doesn't match what was sent, so the install didn't take. Try again; if it keeps happening, try another USB cable.",
   'no-board': FLASH_COPY.pickBoard,
+  'no-port-list':
+    "Nothing was sent: this browser didn't show the list of USB devices to pick your screen from (the Claude app's built-in browser can't). Open this page in Chrome or Edge to send over USB, or send over Wi-Fi.",
   unreachable:
     "Couldn't reach your screen over Wi-Fi. Check it's switched on and on the same Wi-Fi as this computer. In Chrome or Edge, allow this site to reach devices on your local network when asked.",
   'other-screen': "The screen at that address isn't a 1.9-inch ESPER screen. Set it up again with USB.",

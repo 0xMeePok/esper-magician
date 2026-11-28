@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { packMediaImage } from './mediaImage.ts'
 import { findScreen, readLog, screenAddress, sendInPage, WifiError } from './wifi.ts'
 
 const DEVICE = { url: 'http://192.168.0.16/', localUrl: 'http://esper-49f5c0.local/', savedAt: 1 }
@@ -40,6 +41,22 @@ describe('sendInPage', () => {
   it("reports unreachable when the browser or network won't let it through", async () => {
     vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('Failed to fetch'))))
     await expect(sendInPage(DEVICE, IMAGE, SCREEN)).rejects.toMatchObject({ problem: 'unreachable' })
+  })
+
+  it('sends a text design only to a player that can show it', async () => {
+    const design = packMediaImage('scene', new Uint8Array([1, 2, 3]), SCREEN)
+    const fetch = vi.fn(async (url: string) => (url.endsWith('info') ? json({ screen: SCREEN, version: '1.5.0' }) : json({ ok: true })))
+    vi.stubGlobal('fetch', fetch)
+    const error = await sendInPage(DEVICE, design, SCREEN).catch((caught: unknown) => caught)
+    expect(error).toMatchObject({ problem: 'failed' })
+    expect((error as Error).message).toMatch(/player \(1\.5\.0\) is too old for text designs.*USB/)
+    expect(fetch).toHaveBeenCalledTimes(1) // never posted
+
+    // Pictures still go to an older player, and designs to a new one.
+    await sendInPage(DEVICE, packMediaImage('gif', new Uint8Array([1]), SCREEN), SCREEN)
+    fetch.mockImplementation(async (url: string) => (url.endsWith('info') ? json({ screen: SCREEN, version: '1.6.0' }) : json({ ok: true })))
+    await sendInPage(DEVICE, design, SCREEN)
+    expect(fetch.mock.calls.filter(([url]) => url.endsWith('media'))).toHaveLength(2)
   })
 
   it("refuses another screen, and passes on the screen's own message", async () => {

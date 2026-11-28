@@ -21,9 +21,13 @@ function isImageFrame(frame: ParsedGif['frames'][number]): frame is GifFrame {
 
 /**
  * Decodes every frame in order, applying GIF disposal so each yielded frame is the full picture
- * a browser would show, already flattened onto the screen's background.
+ * a browser would show, already flattened onto the screen's background (or, with `flat` false,
+ * with its see-through pixels kept).
  */
-export function* gifFrames(bytes: ArrayBuffer): Generator<{ frame: Frame; delay: number; index: number; count: number }> {
+export function* gifFrames(
+  bytes: ArrayBuffer,
+  { flat = true }: { flat?: boolean } = {},
+): Generator<{ frame: Frame; delay: number; index: number; count: number }> {
   const gif = parseGIF(bytes)
   const frames = gif.frames.filter(isImageFrame)
   const width = gif.lsd.width
@@ -62,7 +66,7 @@ export function* gifFrames(bytes: ArrayBuffer): Generator<{ frame: Frame; delay:
     }
     previous = { left, top, width: w, height: h, disposal: parsed.disposalType }
     yield {
-      frame: flatten({ data: canvas, width, height }),
+      frame: flat ? flatten({ data: canvas, width, height }) : { data: canvas.slice(), width, height },
       delay: playbackDelay(parsed.delay),
       index,
       count: frames.length,
@@ -257,6 +261,21 @@ function placeFrame(bytes: Uint8Array, start: number, rect: Rect) {
   bytes[at + 2] = rect.left >> 8
   bytes[at + 3] = rect.top & 0xff
   bytes[at + 4] = rect.top >> 8
+}
+
+/**
+ * Encodes frames that are already the screen's size at every strength, lightest first, the way
+ * compressGif does (a text design's moving background).
+ */
+export function encodeGifFrames(frames: Iterable<{ frame: Frame; delay: number }>, strengths: readonly Strength[]): EncodedResult[] {
+  const encoders = strengths.map((strength) => new StrengthEncoder(strength))
+  let index = 0
+  for (const { frame, delay } of frames) {
+    for (const encoder of encoders) encoder.add(frame, delay, index)
+    index++
+  }
+  if (index === 0) throw new Error('No frames to encode.')
+  return encoders.map((encoder) => encoder.finish())
 }
 
 /**

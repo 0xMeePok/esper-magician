@@ -333,11 +333,23 @@ describe('put it on my screen (ASH-19)', () => {
   })
 
   it('says plainly what went wrong over USB, and goes quiet if the device list is closed', async () => {
-    setFlashDriver(fakeDriver({ port: null }))
+    // The person looks at the list, then closes it.
+    const closed = fakeDriver({ port: null })
+    const later = Date.now() + 1000
+    vi.spyOn(Date, 'now').mockImplementation(() => later)
+    setFlashDriver({
+      ...closed,
+      choosePort: async () => {
+        const port = await closed.choosePort()
+        vi.mocked(Date.now).mockImplementation(() => later + 1000)
+        return port
+      },
+    })
     const container = await mount()
     await upload(container)
     await click(usbButton())
     await settle()
+    vi.mocked(Date.now).mockRestore()
     expect(calls.prepare).toBeUndefined()
     expect(document.querySelector('[role="alert"]')).toBeNull()
 
@@ -372,23 +384,30 @@ describe('put it on my screen (ASH-19)', () => {
     expect(usbButton()?.getAttribute('aria-disabled')).toBe('true')
   })
 
-  it('asks which board the screen is wired to, and installs the firmware built for it', async () => {
+  it('starts on the 30-pin board, lets another be picked, and installs the firmware built for it', async () => {
     localStorage.removeItem(BOARD_STORAGE_KEY)
     setFlashDriver(fakeDriver())
     const container = await mount()
     await upload(container)
-    expect(usbButton()?.getAttribute('aria-disabled')).toBe('true')
-    expect(flashText()).toContain(FLASH_COPY.pickBoard)
-    await click(usbButton())
-    expect(calls.choosePort).toBeUndefined()
-
-    const thirtyPin = container.querySelector('input[name="esper-board"][value="devkit-30"]')
-    await click(thirtyPin)
-    expect(localStorage.getItem(BOARD_STORAGE_KEY)).toBe('devkit-30')
+    expect(container.querySelector<HTMLInputElement>('input[name="esper-board"][value="devkit-30"]')?.checked).toBe(true)
     expect(usbButton()?.getAttribute('aria-disabled')).toBeNull()
+
+    const thirtyEight = container.querySelector('input[name="esper-board"][value="devkit-38"]')
+    await click(thirtyEight)
+    expect(localStorage.getItem(BOARD_STORAGE_KEY)).toBe('devkit-38')
     await click(usbButton())
     await settle(60)
-    expect(calls.loadFirmware).toEqual([['devkit-30']])
+    expect(calls.loadFirmware).toEqual([['devkit-38']])
+  })
+
+  it("says so when the browser can't show the list of USB devices", async () => {
+    // As in the Claude app's built-in browser: the list "closes" the moment it's asked for.
+    setFlashDriver({ ...fakeDriver(), choosePort: async () => null })
+    const container = await mount()
+    await upload(container)
+    await click(usbButton())
+    await settle()
+    expect(flashText()).toContain("this browser didn't show the list of USB devices")
   })
 
   it("shows the screen's serial output and what it says about the picture", async () => {

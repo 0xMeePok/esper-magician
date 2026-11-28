@@ -73,6 +73,9 @@ export type ConnectState =
 /** Reading the screen's log over Wi-Fi. */
 export type WifiLogState = 'off' | 'on' | 'failed'
 
+/** A device list that closes faster than this was never shown. */
+const NO_LIST_MS = 400
+
 /** How often the log is read over Wi-Fi, and how many misses in a row stop it. */
 const WIFI_LOG_EVERY_MS = 1000
 const WIFI_LOG_MISSES = 3
@@ -246,6 +249,7 @@ export function useFlash({ screen, budget, source, identity }: Options) {
       return
     }
     let port: SerialPort | null
+    const asked = Date.now()
     try {
       port = await driver.choosePort()
     } catch (error) {
@@ -253,7 +257,10 @@ export function useFlash({ screen, budget, source, identity }: Options) {
       return
     }
     if (!port) {
-      setState({ phase: 'idle' }) // the device list was closed
+      // Closed by the person, or never shown: a list "closed" quicker than anyone could close
+      // it means this browser can't show one (as in some apps' built-in browsers).
+      if (Date.now() - asked < NO_LIST_MS) setState({ phase: 'error', route: 'usb', problem: 'no-port-list' })
+      else setState({ phase: 'idle' })
       return
     }
     // The serial monitor may have the port open; the flasher needs it. USB's own log replaces

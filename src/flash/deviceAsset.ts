@@ -2,11 +2,11 @@ import { compressor, type Compressor } from '../compress/client.ts'
 import type { EncodedResult } from '../compress/gif.ts'
 import type { StrengthId } from '../compress/strengths.ts'
 import type { ScreenCrop, Size } from '../crop.ts'
-import type { MediaKind } from './mediaImage.ts'
+import { SCENE_TYPE, type MediaKind } from './mediaImage.ts'
 
 /**
  * What the screen can show: a baseline JPEG or a GIF, no bigger than the screen, made the same way
- * the compression panel makes them. The player decodes only these two.
+ * the compression panel makes them, or a text design from the Text page.
  */
 export type DeviceAsset = {
   kind: MediaKind
@@ -30,6 +30,7 @@ export class TooBigError extends Error {
 function kindFor(type: string): MediaKind {
   if (type === 'image/gif') return 'gif'
   if (type === 'image/jpeg') return 'jpeg'
+  if (type === SCENE_TYPE) return 'scene'
   throw new Error(`The screen can't show ${type || 'this file'}.`)
 }
 

@@ -1,5 +1,6 @@
 import type { Size } from '../crop.ts'
 import type { KnownDevice } from './deviceStore.ts'
+import { readMediaHeader, SCENE_PLAYER_VERSION } from './mediaImage.ts'
 
 /**
  * Sending a picture over Wi-Fi.
@@ -40,6 +41,28 @@ async function askInfo(base: string, timeoutMs: number): Promise<ScreenInfo | nu
   } catch {
     return null
   }
+}
+
+/** "1.5.0" before "1.6.0". */
+export function olderVersion(version: string, than: string): boolean {
+  const a = version.split('.').map((part) => Number.parseInt(part, 10) || 0)
+  const b = than.split('.').map((part) => Number.parseInt(part, 10) || 0)
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    if ((a[i] ?? 0) !== (b[i] ?? 0)) return (a[i] ?? 0) < (b[i] ?? 0)
+  }
+  return false
+}
+
+/**
+ * A text design needs a player that knows them; an older one would only show its test card.
+ * Updating the player takes a USB send.
+ */
+function checkPlayer(image: Uint8Array, version: string | undefined) {
+  if (readMediaHeader(image)?.kind !== 'scene' || !version || !olderVersion(version, SCENE_PLAYER_VERSION)) return
+  throw new WifiError(
+    'failed',
+    `Your screen's player (${version}) is too old for text designs. Send this design over USB once to update it; Wi-Fi works again after that.`,
+  )
 }
 
 export type LogChunk = { text: string; start: number; next: number }
@@ -131,6 +154,7 @@ export async function sendInPage(
   if (info.screen && (info.screen.width !== screen.width || info.screen.height !== screen.height)) {
     throw new WifiError('other-screen')
   }
+  checkPlayer(image, info.version)
 
   let reply: { ok?: boolean; message?: string } = {}
   try {
@@ -179,14 +203,16 @@ function fromScreen(event: MessageEvent, popup: Window): FromScreen | null {
 }
 
 /** Points the window at one address and waits for the screen's page to say hello. */
-function reach(popup: Window, url: string, timeoutMs: number): Promise<{ origin: string; screen?: Size } | null> {
+type Reached = { origin: string; screen?: Size; version?: string }
+
+function reach(popup: Window, url: string, timeoutMs: number): Promise<Reached | null> {
   return new Promise((resolve) => {
     const timer = setTimeout(() => finish(null), timeoutMs)
     const listen = (event: MessageEvent) => {
       const message = fromScreen(event, popup)
-      if (message?.type === 'ready') finish({ origin: event.origin, screen: message.screen })
+      if (message?.type === 'ready') finish({ origin: event.origin, screen: message.screen, version: message.version })
     }
-    function finish(result: { origin: string; screen?: Size } | null) {
+    function finish(result: Reached | null) {
       clearTimeout(timer)
       window.removeEventListener('message', listen)
       resolve(result)
@@ -206,7 +232,7 @@ export async function sendOverWifi(
 ): Promise<void> {
   if (popup.closed) throw new WifiError('blocked')
   const urls = [device.url, device.localUrl].filter((url): url is string => Boolean(url))
-  let reached: { origin: string; screen?: Size } | null = null
+  let reached: Reached | null = null
   for (const url of urls) {
     reached = await reach(popup, url, timeoutMs)
     if (reached || popup.closed) break
@@ -218,6 +244,12 @@ export async function sendOverWifi(
   if (reached.screen && (reached.screen.width !== screen.width || reached.screen.height !== screen.height)) {
     popup.close()
     throw new WifiError('other-screen')
+  }
+  try {
+    checkPlayer(image, reached.version)
+  } catch (error) {
+    popup.close()
+    throw error
   }
 
   const origin = reached.origin

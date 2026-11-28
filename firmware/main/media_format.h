@@ -6,7 +6,8 @@
 // Layout, all numbers little-endian:
 //   0x0000  char     magic[4]      "ESPM"
 //   0x0004  uint16_t version       1
-//   0x0006  uint16_t kind          1 = JPEG picture, 2 = GIF animation
+//   0x0006  uint16_t kind          1 = JPEG picture, 2 = GIF animation,
+//                                  3 = text design (scene_format.h)
 //   0x0008  uint16_t screen_width  the screen it was made for, e.g. 170
 //   0x000A  uint16_t screen_height e.g. 320
 //   0x000C  uint32_t length        payload bytes
@@ -16,7 +17,7 @@
 //                                  payload; anything else (the website writes
 //                                  0xFF) means this is the last one
 //   0x0018  ...                    0xFF up to 0x1000
-//   0x1000  payload                the JPEG or GIF file
+//   0x1000  payload                the JPEG or GIF file, or the design
 //
 // Several images in a row make a playlist; the button steps through them.
 #pragma once
@@ -30,6 +31,7 @@
 typedef enum {
     MEDIA_KIND_JPEG = 1,
     MEDIA_KIND_GIF = 2,
+    MEDIA_KIND_SCENE = 3,
 } media_kind_t;
 
 typedef struct {

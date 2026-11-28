@@ -2,12 +2,12 @@ import type { Size } from '../crop.ts'
 import { MEDIA_HEADER_BYTES } from '../flashLayout.ts'
 
 /**
- * The media image written into the screen's "media" partition: a 4 KB header, then the JPEG or
- * GIF. Keep in step with firmware/main/media_format.h.
+ * The media image written into the screen's "media" partition: a 4 KB header, then the JPEG,
+ * GIF or text design. Keep in step with firmware/main/media_format.h.
  *
  *   0x0000  "ESPM"
  *   0x0004  u16 version (1)
- *   0x0006  u16 kind (1 = JPEG, 2 = GIF)
+ *   0x0006  u16 kind (1 = JPEG, 2 = GIF, 3 = text design, see src/text/sceneFormat.ts)
  *   0x0008  u16 screen width, u16 screen height
  *   0x000C  u32 payload length
  *   0x0010  u32 CRC-32 of the payload (as in zlib)
@@ -16,9 +16,16 @@ import { MEDIA_HEADER_BYTES } from '../flashLayout.ts'
 export const MEDIA_MAGIC = 'ESPM'
 export const MEDIA_VERSION = 1
 
-export type MediaKind = 'jpeg' | 'gif'
+export type MediaKind = 'jpeg' | 'gif' | 'scene'
 
-const KIND_CODE: Record<MediaKind, number> = { jpeg: 1, gif: 2 }
+const KIND_CODE: Record<MediaKind, number> = { jpeg: 1, gif: 2, scene: 3 }
+const KIND_OF: Record<number, MediaKind> = { 1: 'jpeg', 2: 'gif', 3: 'scene' }
+
+/** The file type a text design travels as inside this site. */
+export const SCENE_TYPE = 'application/x-esper-scene'
+
+/** Player version that first plays text designs. */
+export const SCENE_PLAYER_VERSION = '1.6.0'
 
 let table: Uint32Array | null = null
 
@@ -64,8 +71,7 @@ export function readMediaHeader(image: Uint8Array): MediaHeader | null {
   if (image.length < 20 || String.fromCharCode(...image.subarray(0, 4)) !== MEDIA_MAGIC) return null
   const view = new DataView(image.buffer, image.byteOffset, image.byteLength)
   if (view.getUint16(4, true) !== MEDIA_VERSION) return null
-  const code = view.getUint16(6, true)
-  const kind = code === 1 ? 'jpeg' : code === 2 ? 'gif' : null
+  const kind = KIND_OF[view.getUint16(6, true)]
   if (!kind) return null
   return {
     kind,
