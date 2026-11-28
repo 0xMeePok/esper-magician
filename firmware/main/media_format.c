@@ -27,7 +27,7 @@ media_header_result_t media_header_parse(const uint8_t *b, size_t len, uint32_t 
     out->screen_height = le16(b + 10);
     out->length = le32(b + 12);
     out->crc32 = le32(b + 16);
-    if ((kind != MEDIA_KIND_JPEG && kind != MEDIA_KIND_GIF) || out->length == 0 ||
+    if (kind < MEDIA_KIND_JPEG || kind > MEDIA_KIND_SCENE || out->length == 0 ||
         capacity < MEDIA_HEADER_BYTES || out->length > capacity - MEDIA_HEADER_BYTES) {
         return MEDIA_HEADER_BAD;
     }

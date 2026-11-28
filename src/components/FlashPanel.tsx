@@ -41,15 +41,27 @@ export default function FlashPanel(props: FlashPanelProps) {
   const wifiDisabled = held || !wireless
   const usbDisabled = held || !usbAvailable || props.board === null
 
+  // Why a button that looks available can't go yet, said when it's clicked.
+  const [why, setWhy] = useState<string | null>(null)
   let helper: string = wireless ? FLASH_COPY.helperWifi : FLASH_COPY.connectFirst
   if (blocked) helper = blocked
+  else if (why) helper = why
 
   return (
     <section className="flash" aria-label="Put it on your screen">
       <ScreenConnect {...props} disabled={working} />
       <div className="flash__buttons">
         <SendButton label={FLASH_COPY.sendWifi} disabled={wifiDisabled} describedBy={helperId} onClick={props.onStartWifi} />
-        <SendButton label={FLASH_COPY.sendUsb} disabled={usbDisabled} describedBy={helperId} onClick={props.onStartUsb} />
+        <SendButton
+          label={FLASH_COPY.sendUsb}
+          disabled={usbDisabled}
+          describedBy={helperId}
+          onClick={() => {
+            setWhy(null)
+            props.onStartUsb()
+          }}
+          onBlocked={() => setWhy(!usbAvailable ? FLASH_COPY.needsChrome : props.board === null ? FLASH_COPY.pickBoard : null)}
+        />
       </div>
       <p id={helperId} className="helper flash__helper">
         {helper}
@@ -154,11 +166,14 @@ function SendButton({
   disabled,
   describedBy,
   onClick,
+  onBlocked,
 }: {
   label: string
   disabled: boolean
   describedBy: string
   onClick: () => void
+  /** Clicked while it can't go. */
+  onBlocked?: () => void
 }) {
   return (
     <button
@@ -168,6 +183,7 @@ function SendButton({
       aria-disabled={disabled || undefined}
       onClick={() => {
         if (!disabled) onClick()
+        else onBlocked?.()
       }}
     >
       {label}

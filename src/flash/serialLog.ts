@@ -48,7 +48,7 @@ function lastIndex(lines: string[], pattern: RegExp): number {
 }
 
 // The screen's report on the picture it stored (main.c and media.c), or on why there isn't one.
-const STORED = /(JPEG|GIF), (\d+) bytes, CRC 0x([0-9a-f]{8}) OK/
+const STORED = /(JPEG|GIF|Text design), (\d+) bytes, CRC 0x([0-9a-f]{8}) OK/
 const NO_PICTURE =
   /picture is damaged|picture header is damaged|stored picture not usable|no picture yet|picture is for a|picture not saved/
 
@@ -124,8 +124,8 @@ export function checkBoardLog(log: LogLine[], expected: Expected | null): Check[
   // The ESP32 only writes to the screen (nothing is wired back), so this is as far as it can
   // tell: every pixel went out over SPI. Whether the glass shows them, it can't see.
   const sentLabel = 'Picture sent to the screen over SPI'
-  const drawn = /drew JPEG (\d+)x(\d+)|GIF (\d+)x(\d+) at/
-  const failed = /JPEG decode failed|GIF won't open|GIF frame failed/
+  const drawn = /drew JPEG (\d+)x(\d+)|GIF (\d+)x(\d+) at|drew design (\d+)x(\d+)/
+  const failed = /JPEG decode failed|GIF won't open|GIF frame failed|design won't open/
   const drawnAt = lastIndex(lines, drawn)
   const failedAt = lastIndex(lines, failed)
   if (failedAt > drawnAt) {
@@ -136,7 +136,7 @@ export function checkBoardLog(log: LogLine[], expected: Expected | null): Check[
       id: 'drawn',
       label: sentLabel,
       status: 'ok',
-      detail: `${match[1] ?? match[3]}×${match[2] ?? match[4]} pixels`,
+      detail: `${match[1] ?? match[3] ?? match[5]}×${match[2] ?? match[4] ?? match[6]} pixels`,
     })
   } else {
     // Nothing drawn since the last picture problem: the screen is on the test card.

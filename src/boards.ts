@@ -30,12 +30,15 @@ export function boardFor(id: BoardId): Board {
   return boards.find((board) => board.id === id)!
 }
 
-export function readBoard(): BoardId | null {
+/** The board picked until another is: the 30-pin USB-C DevKit, the one ESPER screens are built on. */
+export const DEFAULT_BOARD: BoardId = 'devkit-30'
+
+export function readBoard(): BoardId {
   try {
     const value = localStorage.getItem(BOARD_STORAGE_KEY)
-    return isBoardId(value) ? value : null
+    return isBoardId(value) ? value : DEFAULT_BOARD
   } catch {
-    return null
+    return DEFAULT_BOARD
   }
 }
 

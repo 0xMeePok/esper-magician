@@ -1,5 +1,5 @@
-// The picture or GIF in the "media" partition: checking it, drawing it, and
-// replacing it with one sent over Wi-Fi.
+// The picture, GIF or text design in the "media" partition: checking it,
+// drawing it, and replacing it with one sent over Wi-Fi.
 //
 // Drawing and writing both use the screen and the partition, so callers hold
 // media_lock() around them.
@@ -27,7 +27,11 @@ esp_err_t media_load_at(int index);
 // How many pictures are stored one after another (see media_format.h).
 int media_count(void);
 
-// True when the loaded picture is an animation.
+// The backlight brightness the loaded picture asks for, in percent: a
+// design's own setting, or 100.
+int media_brightness(void);
+
+// True when the loaded picture is an animation (a GIF, or a design).
 bool media_is_animated(void);
 
 // Draws the loaded picture, or the first frame of an animation, centred on
@@ -35,7 +39,8 @@ bool media_is_animated(void);
 // the first frame; for a still picture it is 0.
 esp_err_t media_show(uint32_t *delay_ms);
 
-// Draws the next animation frame and says how long to show it.
+// Draws the next animation frame (for a design, whatever has moved) and says
+// how long until the next one.
 esp_err_t media_next_frame(uint32_t *delay_ms);
 
 // Size of the partition, header included.

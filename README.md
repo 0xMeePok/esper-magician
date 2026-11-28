@@ -12,6 +12,13 @@ In the browser you can:
 - Crop and rotate an upload. The original file is kept; the crop is saved as settings, and GIFs keep playing.
 - If an upload is too big for the screen's picture space (2.18 MB, see `firmware/partitions.media.csv`), pick Light, Balanced or Strong compression and preview the result on the screen. Pictures use MozJPEG (via jSquash) and GIFs use gifuct-js + gifenc, all in a Web Worker in the browser.
 - Click **Put it on my screen** (ASH-19). Everything except the Digital clock can go on the screen.
+- On the **Text** page (navbar at the top), make a sign like an LED scroller: text in Plain, Neon or LED looks, nine kinds of lettering, any colour and size, placed and sized by dragging, turned to any angle, still, blinking or scrolling in any direction at the speed you pick, with pictures or a moving GIF behind. The screen can stand upright, sideways or upside down, and each design sets how bright the screen is. Layers always stay on the screen, so none can be lost off an edge. Designs are saved in this browser (IndexedDB) to open and change later, and sent to the screen like pictures.
+
+## Text designs
+
+The site doesn't send a GIF of scrolling text: that would be large and choppy. It draws each part of the design (a line of text, the LED dots, a picture) once into a small picture with see-through edges, a *sprite*, works out where it sits and how it moves on the screen, and sends those (`src/text/`). The player (1.6.0 and newer) moves and blinks the sprites itself, redrawing only what changed each step (`firmware/main/scene.c`), so text scrolls smoothly and a long message stays small. Anything behind the first moving part is drawn once into the background; a GIF at the back plays under the text.
+
+The preview on the page uses the same sprites and the same timing code as the player (`src/text/sceneFormat.ts` mirrors `firmware/main/scene_format.c`), so it moves exactly like the screen. A screen with an older player needs one USB send to update before it takes designs over Wi-Fi; the site says so.
 
 ## Put it on my screen
 
@@ -41,7 +48,7 @@ npm run dev
 npm test
 ```
 
-`src/flash/deviceFormat.test.ts` compiles the player's own C code (the GIF decoder, the media header check and Improv Serial) with the computer's C compiler and runs it on exactly what the site produces. It is skipped where there is no `cc`.
+`src/flash/deviceFormat.test.ts` compiles the player's own C code (the GIF decoder, the media header check and Improv Serial) with the computer's C compiler and runs it on exactly what the site produces; `src/text/sceneFormat.test.ts` does the same for text designs, checking the player draws every pixel at every moment as the editor does. They are skipped where there is no `cc`.
 
 ## Production build
 

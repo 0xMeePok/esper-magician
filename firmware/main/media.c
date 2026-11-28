@@ -11,6 +11,7 @@
 #include "freertos/semphr.h"
 #include "gif_decoder.h"
 #include "media_format.h"
+#include "scene.h"
 #include "screen.h"
 
 static const char *TAG = "media";
@@ -78,9 +79,14 @@ bool media_has_changed(void)
     return s_changed;
 }
 
+int media_brightness(void)
+{
+    return s_loaded && s_header.kind == MEDIA_KIND_SCENE ? scene_brightness() : 100;
+}
+
 bool media_is_animated(void)
 {
-    return s_loaded && s_header.kind == MEDIA_KIND_GIF;
+    return s_loaded && (s_header.kind == MEDIA_KIND_GIF || s_header.kind == MEDIA_KIND_SCENE);
 }
 
 static bool read_payload(void *ctx, uint32_t offset, uint8_t *buf, uint32_t len)
@@ -132,6 +138,7 @@ esp_err_t media_load_at(int index)
     s_loaded = false;
     free(s_gif);
     s_gif = NULL;
+    scene_close();
     ESP_RETURN_ON_FALSE(s_part, ESP_ERR_NOT_FOUND, TAG, "no media partition");
     // The first picture is always read from the start, so an empty or damaged
     // header is reported as such rather than as "no picture".
@@ -191,10 +198,14 @@ esp_err_t media_load_at(int index)
         s_ox = (BOARD_LCD_WIDTH - s_gif->width) / 2;
         s_oy = (BOARD_LCD_HEIGHT - s_gif->height) / 2;
         ESP_LOGI(TAG, "GIF %dx%d at (%d,%d)", s_gif->width, s_gif->height, s_ox, s_oy);
+    } else if (s_header.kind == MEDIA_KIND_SCENE) {
+        ESP_RETURN_ON_ERROR(scene_open(s_part, s_base + MEDIA_HEADER_BYTES, s_header.length), TAG,
+                            "design won't open");
     }
     s_loaded = true;
     // The website compares this CRC with the one it sent.
-    ESP_LOGI(TAG, "%s, %lu bytes, CRC 0x%08lx OK", s_header.kind == MEDIA_KIND_GIF ? "GIF" : "JPEG",
+    static const char *const names[] = {"?", "JPEG", "GIF", "Text design"};
+    ESP_LOGI(TAG, "%s, %lu bytes, CRC 0x%08lx OK", names[s_header.kind <= 3 ? s_header.kind : 0],
              (unsigned long)s_header.length, (unsigned long)s_header.crc32);
     return ESP_OK;
 }
@@ -291,6 +302,9 @@ static void gif_row(void *ctx, int x, int y, int w, const uint16_t *px)
 
 esp_err_t media_next_frame(uint32_t *delay_ms)
 {
+    if (s_loaded && s_header.kind == MEDIA_KIND_SCENE) {
+        return scene_next(delay_ms);
+    }
     ESP_RETURN_ON_FALSE(s_gif, ESP_ERR_INVALID_STATE, TAG, "not an animation");
     gif_frame_t frame;
     s_band.rows = 0;
@@ -308,6 +322,9 @@ esp_err_t media_show(uint32_t *delay_ms)
 {
     *delay_ms = 0;
     ESP_RETURN_ON_FALSE(s_loaded, ESP_ERR_INVALID_STATE, TAG, "nothing loaded");
+    if (s_header.kind == MEDIA_KIND_SCENE) {
+        return scene_show(delay_ms); // it draws the whole screen itself
+    }
     ESP_RETURN_ON_ERROR(screen_fill(SCREEN_BACKGROUND), TAG, "fill");
     if (s_header.kind == MEDIA_KIND_JPEG) {
         return show_jpeg();
@@ -340,6 +357,7 @@ esp_err_t media_write_begin(uint32_t total)
                         TAG, "%lu bytes won't fit", (unsigned long)total);
     free(s_gif);
     s_gif = NULL;
+    scene_close(); // a design reads straight from the flash about to be rewritten
     s_loaded = false;
     s_base = 0;
     free(s_head);
