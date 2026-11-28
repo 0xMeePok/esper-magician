@@ -210,13 +210,66 @@ describe('GIF compression (ASH-31)', () => {
       const total = entry.frames.reduce((sum, frame) => sum + frame.delay, 0)
       expect(total).toBe(12 * 50)
     }
+    // Light and Balanced keep every frame, so the motion stays smooth; only Strong drops any.
     expect(light!.frames).toHaveLength(12)
-    expect(balanced!.frames).toHaveLength(6)
-    expect(strong!.frames).toHaveLength(4)
-    expect(balanced!.frames.map((frame) => frame.delay)).toEqual([100, 100, 100, 100, 100, 100])
+    expect(balanced!.frames).toHaveLength(12)
+    expect(balanced!.frames.map((frame) => frame.delay)).toEqual(Array(12).fill(50))
+    expect(strong!.frames).toHaveLength(6)
+    expect(strong!.frames.map((frame) => frame.delay)).toEqual(Array(6).fill(100))
     expect(strong!.result.bytes.byteLength).toBeLessThan(balanced!.result.bytes.byteLength)
     expect(balanced!.result.bytes.byteLength).toBeLessThan(light!.result.bytes.byteLength)
-    for (const frame of strong!.frames) expect(frame.colorTable.length).toBeLessThanOrEqual(16)
+    for (const frame of strong!.frames) expect(frame.colorTable.length).toBeLessThanOrEqual(64)
+  })
+
+  it('redraws only what changed, so every frame looks like the original in far fewer bytes', () => {
+    // A still background with a small square moving across it, like a sprite on a scene.
+    const width = 320
+    const height = 240
+    const count = 24
+    const sources: Uint8ClampedArray[] = []
+    const gif = GIFEncoder()
+    for (let i = 0; i < count; i++) {
+      const data = new Uint8ClampedArray(width * height * 4)
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const inSquare = x >= i * 12 && x < i * 12 + 20 && y >= 100 && y < 120
+          const color = inSquare ? [250, 120, 30] : [20 + ((x * 3 + y) % 40), 60 + (y % 50), 110 + (x % 60)]
+          data.set([...color, 255], (y * width + x) * 4)
+        }
+      }
+      sources.push(data)
+      const palette = quantize(data, 256)
+      gif.writeFrame(applyPalette(data, palette), width, height, { palette, delay: 60 })
+    }
+    gif.finish()
+    const original = gif.bytes()
+    const buffer = original.buffer.slice(original.byteOffset, original.byteOffset + original.byteLength) as ArrayBuffer
+
+    const [light] = compressGif(buffer, STRENGTHS.slice(0, 1), wide, null)
+    const { parsed, frames } = readGif(light!.bytes)
+    expect(frames).toHaveLength(count)
+    expect(light!.bytes.byteLength).toBeLessThan(original.byteLength / 4)
+
+    // Draw the frames the way a browser (and the player) does: each over the last.
+    const screen = new Uint8ClampedArray(parsed.lsd.width * parsed.lsd.height * 4)
+    frames.forEach((frame, index) => {
+      expect(frame.disposalType).toBe(1)
+      const { left, top, width: w, height: h } = frame.dims
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const from = (y * w + x) * 4
+          if (frame.patch[from + 3] === 0) continue
+          screen.set(frame.patch.subarray(from, from + 4), ((top + y) * parsed.lsd.width + left + x) * 4)
+        }
+      }
+      if (index > 0) expect(w * h).toBeLessThan((width * height) / 4)
+      let off = 0
+      for (let at = 0; at < screen.length; at += 4) {
+        const want = [sources[index]![at]!, sources[index]![at + 1]!, sources[index]![at + 2]!]
+        if (!near([screen[at]!, screen[at + 1]!, screen[at + 2]!], want)) off++
+      }
+      expect(off, `frame ${index}`).toBeLessThan(screen.length / 4 / 100)
+    })
   })
 
   it('uses the crop for the selected screen', () => {

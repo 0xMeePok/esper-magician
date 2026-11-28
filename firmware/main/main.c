@@ -55,20 +55,24 @@ static bool button_was_pressed(void)
 
 typedef enum { WAKE_TIMEOUT, WAKE_BUTTON, WAKE_NEW_PICTURE } wake_t;
 
-// Waits up to `ms`, returning early on a button press or a new picture.
-static wake_t wait(uint32_t ms)
+// Waits until `due` (a tick count), returning early on a button press or a new
+// picture. Never sleeps past `due`, so animation frames start on time.
+static wake_t wait_until(TickType_t due)
 {
-    TickType_t start = xTaskGetTickCount();
-    do {
+    for (;;) {
         if (button_was_pressed()) {
             return WAKE_BUTTON;
         }
         if (media_has_changed()) {
             return WAKE_NEW_PICTURE;
         }
-        vTaskDelay(pdMS_TO_TICKS(POLL_MS) ?: 1);
-    } while (pdTICKS_TO_MS(xTaskGetTickCount() - start) < ms);
-    return WAKE_TIMEOUT;
+        TickType_t left = due - xTaskGetTickCount();
+        if (left == 0 || left > portMAX_DELAY / 2) { // reached, or already past
+            return WAKE_TIMEOUT;
+        }
+        TickType_t step = pdMS_TO_TICKS(POLL_MS) ?: 1;
+        vTaskDelay(left < step ? left : step);
+    }
 }
 
 // Draws the stored picture, or the test card if there isn't a usable one.
@@ -133,11 +137,21 @@ void app_main(void)
     ESP_LOGI(TAG, "running from %s; %s is free for the next version", running ? running->label : "?",
              spare ? spare->label : "no slot");
 
+    // When the frame now on the screen started drawing. The next frame is due
+    // `hold` ms after that, so the time spent decoding and drawing comes out of
+    // the frame's delay instead of being added to it.
+    TickType_t drawn_at = xTaskGetTickCount();
     bool showing_card = false;
     while (true) {
         // `hold` is how long the frame on the screen stays; 0 means "until
         // something happens" (a still picture or the test card).
-        if (wait(hold ? hold : POLL_MS) == WAKE_BUTTON) {
+        TickType_t now = xTaskGetTickCount();
+        TickType_t due = hold ? drawn_at + pdMS_TO_TICKS(hold) : now + (pdMS_TO_TICKS(POLL_MS) ?: 1);
+        wake_t wake = wait_until(due);
+        // Running late (a slow frame): start from now rather than rushing to catch up.
+        now = xTaskGetTickCount();
+        drawn_at = hold && now - due < pdMS_TO_TICKS(hold) ? due : now;
+        if (wake == WAKE_BUTTON) {
             showing_card = !showing_card;
             media_lock();
             if (showing_card || !picture) {
