@@ -11,8 +11,14 @@
 //   0x000A  uint16_t screen_height e.g. 320
 //   0x000C  uint32_t length        payload bytes
 //   0x0010  uint32_t crc32         CRC-32 (as in zlib) of the payload
-//   0x0014  ...                    0xFF up to 0x1000
+//   0x0014  char     next[4]       "NEXT" when another media image follows this
+//                                  one, at the first 4 KB boundary after its
+//                                  payload; anything else (the website writes
+//                                  0xFF) means this is the last one
+//   0x0018  ...                    0xFF up to 0x1000
 //   0x1000  payload                the JPEG or GIF file
+//
+// Several images in a row make a playlist; the button steps through them.
 #pragma once
 
 #include <stddef.h>
@@ -44,6 +50,11 @@ typedef enum {
 // Checks the first bytes of the partition. `capacity` is the partition size.
 media_header_result_t media_header_parse(const uint8_t *bytes, size_t len, uint32_t capacity,
                                          media_header_t *out);
+
+// Where the next media image starts (from the start of the partition), given
+// the header at `at`, or 0 when this one is the last.
+uint32_t media_next_offset(const uint8_t *bytes, size_t len, const media_header_t *header,
+                           uint32_t at);
 
 // CRC-32 as used by zlib and PNG. Start with crc = 0, and feed the data in
 // pieces by passing the previous result back in.

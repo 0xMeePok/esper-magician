@@ -18,10 +18,12 @@ static const char *TAG = "media";
 #define MEDIA_SUBTYPE 0x40
 #define ERASE_BLOCK (64 * 1024)
 #define BAND_ROWS 16
+#define MAX_ITEMS 32 // most pictures looked for in a playlist
 
 static const esp_partition_t *s_part;
 static SemaphoreHandle_t s_lock;
 static media_header_t s_header;
+static uint32_t s_base; // where the loaded picture's header starts in the partition
 static bool s_loaded;
 static volatile bool s_changed;
 
@@ -83,19 +85,64 @@ bool media_is_animated(void)
 
 static bool read_payload(void *ctx, uint32_t offset, uint8_t *buf, uint32_t len)
 {
-    return esp_partition_read(s_part, MEDIA_HEADER_BYTES + offset, buf, len) == ESP_OK;
+    return esp_partition_read(s_part, s_base + MEDIA_HEADER_BYTES + offset, buf, len) == ESP_OK;
+}
+
+// Finds where the `index`-th picture's header starts. Returns false when there
+// are fewer valid pictures: the walk stops at the first header that isn't one.
+static bool find_item(int index, uint32_t *at_out)
+{
+    uint32_t at = 0;
+    for (int i = 0; i < MAX_ITEMS && at + MEDIA_HEADER_BYTES <= s_part->size; i++) {
+        uint8_t head[32];
+        media_header_t h;
+        if (esp_partition_read(s_part, at, head, sizeof(head)) != ESP_OK ||
+            media_header_parse(head, sizeof(head), s_part->size - at, &h) != MEDIA_HEADER_OK) {
+            return false;
+        }
+        if (i == index) {
+            *at_out = at;
+            return true;
+        }
+        at = media_next_offset(head, sizeof(head), &h, at);
+        if (at == 0) {
+            return false;
+        }
+    }
+    return false;
+}
+
+int media_count(void)
+{
+    int n = 0;
+    uint32_t at;
+    while (s_part && n < MAX_ITEMS && find_item(n, &at)) {
+        n++;
+    }
+    return n;
 }
 
 esp_err_t media_load(void)
+{
+    return media_load_at(0);
+}
+
+esp_err_t media_load_at(int index)
 {
     s_loaded = false;
     free(s_gif);
     s_gif = NULL;
     ESP_RETURN_ON_FALSE(s_part, ESP_ERR_NOT_FOUND, TAG, "no media partition");
+    // The first picture is always read from the start, so an empty or damaged
+    // header is reported as such rather than as "no picture".
+    s_base = 0;
+    if (index > 0 && !find_item(index, &s_base)) {
+        return ESP_ERR_NOT_FOUND;
+    }
 
     uint8_t head[32];
-    ESP_RETURN_ON_ERROR(esp_partition_read(s_part, 0, head, sizeof(head)), TAG, "read");
-    switch (media_header_parse(head, sizeof(head), s_part->size, &s_header)) {
+    ESP_RETURN_ON_ERROR(esp_partition_read(s_part, s_base, head, sizeof(head)), TAG, "read");
+    switch (media_header_parse(head, sizeof(head), s_part->size - s_base, &s_header)) {
     case MEDIA_HEADER_OK:
         break;
     case MEDIA_HEADER_EMPTY:
@@ -294,6 +341,7 @@ esp_err_t media_write_begin(uint32_t total)
     free(s_gif);
     s_gif = NULL;
     s_loaded = false;
+    s_base = 0;
     free(s_head);
     s_head = malloc(MEDIA_HEADER_BYTES);
     ESP_RETURN_ON_FALSE(s_head, ESP_ERR_NO_MEM, TAG, "no memory");

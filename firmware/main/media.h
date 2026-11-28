@@ -20,6 +20,13 @@ void media_unlock(void);
 // damaged or made for a different screen.
 esp_err_t media_load(void);
 
+// The same for the `index`-th picture of a playlist (0 is the first).
+// ESP_ERR_NOT_FOUND when there are fewer pictures than that.
+esp_err_t media_load_at(int index);
+
+// How many pictures are stored one after another (see media_format.h).
+int media_count(void);
+
 // True when the loaded picture is an animation.
 bool media_is_animated(void);
 

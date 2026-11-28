@@ -6,7 +6,8 @@
 // Reads a media image (as the website writes it), checks the header and CRC
 // like the device does, and for a GIF draws frames onto a 170x320 screen
 // exactly as media.c places them. Each screen is written to frames.raw as
-// little-endian RGB565. Prints one line of JSON describing what it found.
+// little-endian RGB565. Prints one line of JSON describing what it found,
+// including how many pictures a playlist holds ("items").
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -72,6 +73,23 @@ int main(int argc, char **argv)
     bool crc_ok = size_ok && crc == h.crc32;
     printf("{\"header\":0,\"kind\":%d,\"screen\":[%u,%u],\"length\":%u,\"crc_ok\":%s",
            (int)h.kind, h.screen_width, h.screen_height, h.length, crc_ok ? "true" : "false");
+    // Count a playlist's pictures the way media.c walks it: every one must be
+    // a valid header with a matching CRC, and only "NEXT" leads on.
+    int items = 0;
+    for (uint32_t at = 0; items < 32 && at + MEDIA_HEADER_BYTES <= len;) {
+        media_header_t ih;
+        if (media_header_parse(file + at, len - at, CAPACITY - at, &ih) != MEDIA_HEADER_OK ||
+            len - at - MEDIA_HEADER_BYTES < ih.length ||
+            media_crc32(0, file + at + MEDIA_HEADER_BYTES, ih.length) != ih.crc32) {
+            break;
+        }
+        items++;
+        at = media_next_offset(file + at, len - at, &ih, at);
+        if (at == 0) {
+            break;
+        }
+    }
+    printf(",\"items\":%d", items);
     if (!crc_ok || h.kind != MEDIA_KIND_GIF) {
         printf("}\n");
         return crc_ok ? 0 : 1;

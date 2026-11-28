@@ -42,6 +42,7 @@ type HostResult = {
   delays?: number[]
   frames?: number
   gif_error?: number
+  items?: number
 }
 
 function runHost(image: Uint8Array, name: string): { result: HostResult; raw: Buffer } {
@@ -140,6 +141,33 @@ describe.skipIf(!hasCompiler)('website → player: media image', () => {
       // Outside the picture is the #2A2A2A background.
       if (oy > 0) expect(raw.readUInt16LE(0)).toBe(0x2945)
     }
+  })
+
+  it('walks a playlist only through headers marked NEXT', () => {
+    const jpeg = (n: number) => Uint8Array.from([0xff, 0xd8, ...Array.from({ length: n }, (_, i) => i % 251)])
+    const items = [jpeg(5000), jpeg(10), jpeg(300)].map((payload) => packMediaImage('jpeg', payload, SCREEN))
+    // What tools/make_media.py writes: "NEXT" at 0x14, next picture on a 4 KB boundary.
+    const parts: Uint8Array[] = items.map((item, index) => {
+      if (index === items.length - 1) return item
+      const padded = new Uint8Array(Math.ceil(item.length / 4096) * 4096).fill(0xff)
+      padded.set(item)
+      padded.set(new TextEncoder().encode('NEXT'), 20)
+      return padded
+    })
+    const playlist = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0))
+    parts.reduce((at, part) => (playlist.set(part, at), at + part.length), 0)
+    expect(runHost(playlist, 'playlist').result).toMatchObject({ crc_ok: true, items: 3 })
+
+    // The website writes 0xFF at 0x14, so a picture it sends over an old playlist stands alone.
+    const sent = playlist.slice()
+    sent.set(items[1]!, 0)
+    sent.fill(0xff, items[1]!.length, 4096)
+    expect(runHost(sent, 'sent-over-playlist').result).toMatchObject({ crc_ok: true, items: 1 })
+
+    // A damaged second picture ends the playlist there.
+    const damaged = playlist.slice()
+    damaged[parts[0]!.length + 4096 + 3]! ^= 0xff
+    expect(runHost(damaged, 'damaged-playlist').result).toMatchObject({ crc_ok: true, items: 1 })
   })
 
   it('refuses damaged pictures, pictures for another screen, and empty flash', { timeout: 30000 }, () => {

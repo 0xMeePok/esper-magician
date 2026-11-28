@@ -5,8 +5,10 @@
 // page this player serves on the home network (web.c).
 //
 // Before anything has been sent, or if what's stored is damaged, the screen
-// shows a colour test card. Each press of the button (GPIO 33, or 16 on the
-// 30-pin board) switches between the picture and the test card.
+// shows a colour test card. With several pictures stored one after another (a
+// playlist, see media_format.h), each press of the button (GPIO 33, or 16 on
+// the 30-pin board) shows the next one. With one, it switches between the
+// picture and the test card.
 
 #include <stdio.h>
 #include "board.h"
@@ -79,10 +81,17 @@ static wake_t wait_until(TickType_t due)
 // Returns true when a picture is showing; `hold_ms` gets how long to wait
 // before the next animation frame (0 for a still picture). Call with the media
 // lock held.
+// Which picture of a playlist is showing; the button steps through them.
+static int s_index;
+
 static bool show_stored(uint32_t *hold_ms)
 {
     *hold_ms = 0;
-    esp_err_t err = media_load();
+    esp_err_t err = media_load_at(s_index);
+    if (err == ESP_ERR_NOT_FOUND && s_index > 0) {
+        s_index = 0; // the playlist got shorter: start again from the first
+        err = media_load_at(0);
+    }
     if (err == ESP_OK && media_show(hold_ms) == ESP_OK) {
         return true;
     }
@@ -152,8 +161,18 @@ void app_main(void)
         now = xTaskGetTickCount();
         drawn_at = hold && now - due < pdMS_TO_TICKS(hold) ? due : now;
         if (wake == WAKE_BUTTON) {
-            showing_card = !showing_card;
             media_lock();
+            int count = media_count();
+            if (count > 1) {
+                // Several pictures stored: step to the next one, round and round.
+                s_index = (s_index + 1) % count;
+                ESP_LOGI(TAG, "button: picture %d of %d", s_index + 1, count);
+                showing_card = false;
+                picture = show_stored(&hold);
+                media_unlock();
+                continue;
+            }
+            showing_card = !showing_card;
             if (showing_card || !picture) {
                 test_card_draw();
                 hold = 0;
@@ -168,6 +187,7 @@ void app_main(void)
         if (media_take_changed()) {
             // A new picture arrived over Wi-Fi (or a transfer stopped part way).
             showing_card = false;
+            s_index = 0;
             picture = show_stored(&hold);
         } else if (hold && picture && !showing_card) {
             if (media_next_frame(&hold) != ESP_OK) {

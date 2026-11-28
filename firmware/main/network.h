@@ -9,7 +9,7 @@
 #include "esp_wifi_types.h"
 
 #define ESPER_FIRMWARE_NAME "ESPER player"
-#define ESPER_FIRMWARE_VERSION "1.4.1"
+#define ESPER_FIRMWARE_VERSION "1.5.0"
 
 // The screen's own address on its setup hotspot.
 #define NETWORK_SETUP_IP "192.168.4.1"
