@@ -5,8 +5,10 @@
 // page this player serves on the home network (web.c).
 //
 // Before anything has been sent, or if what's stored is damaged, the screen
-// shows a colour test card. Each press of the button (GPIO 33, or 16 on the
-// 30-pin board) switches between the picture and the test card.
+// shows a colour test card. With several pictures stored one after another (a
+// playlist, see media_format.h), each press of the button (GPIO 33, or 16 on
+// the 30-pin board) shows the next one. With one, it switches between the
+// picture and the test card.
 
 #include <stdio.h>
 #include "board.h"
@@ -55,30 +57,41 @@ static bool button_was_pressed(void)
 
 typedef enum { WAKE_TIMEOUT, WAKE_BUTTON, WAKE_NEW_PICTURE } wake_t;
 
-// Waits up to `ms`, returning early on a button press or a new picture.
-static wake_t wait(uint32_t ms)
+// Waits until `due` (a tick count), returning early on a button press or a new
+// picture. Never sleeps past `due`, so animation frames start on time.
+static wake_t wait_until(TickType_t due)
 {
-    TickType_t start = xTaskGetTickCount();
-    do {
+    for (;;) {
         if (button_was_pressed()) {
             return WAKE_BUTTON;
         }
         if (media_has_changed()) {
             return WAKE_NEW_PICTURE;
         }
-        vTaskDelay(pdMS_TO_TICKS(POLL_MS) ?: 1);
-    } while (pdTICKS_TO_MS(xTaskGetTickCount() - start) < ms);
-    return WAKE_TIMEOUT;
+        TickType_t left = due - xTaskGetTickCount();
+        if (left == 0 || left > portMAX_DELAY / 2) { // reached, or already past
+            return WAKE_TIMEOUT;
+        }
+        TickType_t step = pdMS_TO_TICKS(POLL_MS) ?: 1;
+        vTaskDelay(left < step ? left : step);
+    }
 }
 
 // Draws the stored picture, or the test card if there isn't a usable one.
 // Returns true when a picture is showing; `hold_ms` gets how long to wait
 // before the next animation frame (0 for a still picture). Call with the media
 // lock held.
+// Which picture of a playlist is showing; the button steps through them.
+static int s_index;
+
 static bool show_stored(uint32_t *hold_ms)
 {
     *hold_ms = 0;
-    esp_err_t err = media_load();
+    esp_err_t err = media_load_at(s_index);
+    if (err == ESP_ERR_NOT_FOUND && s_index > 0) {
+        s_index = 0; // the playlist got shorter: start again from the first
+        err = media_load_at(0);
+    }
     if (err == ESP_OK && media_show(hold_ms) == ESP_OK) {
         return true;
     }
@@ -133,13 +146,33 @@ void app_main(void)
     ESP_LOGI(TAG, "running from %s; %s is free for the next version", running ? running->label : "?",
              spare ? spare->label : "no slot");
 
+    // When the frame now on the screen started drawing. The next frame is due
+    // `hold` ms after that, so the time spent decoding and drawing comes out of
+    // the frame's delay instead of being added to it.
+    TickType_t drawn_at = xTaskGetTickCount();
     bool showing_card = false;
     while (true) {
         // `hold` is how long the frame on the screen stays; 0 means "until
         // something happens" (a still picture or the test card).
-        if (wait(hold ? hold : POLL_MS) == WAKE_BUTTON) {
-            showing_card = !showing_card;
+        TickType_t now = xTaskGetTickCount();
+        TickType_t due = hold ? drawn_at + pdMS_TO_TICKS(hold) : now + (pdMS_TO_TICKS(POLL_MS) ?: 1);
+        wake_t wake = wait_until(due);
+        // Running late (a slow frame): start from now rather than rushing to catch up.
+        now = xTaskGetTickCount();
+        drawn_at = hold && now - due < pdMS_TO_TICKS(hold) ? due : now;
+        if (wake == WAKE_BUTTON) {
             media_lock();
+            int count = media_count();
+            if (count > 1) {
+                // Several pictures stored: step to the next one, round and round.
+                s_index = (s_index + 1) % count;
+                ESP_LOGI(TAG, "button: picture %d of %d", s_index + 1, count);
+                showing_card = false;
+                picture = show_stored(&hold);
+                media_unlock();
+                continue;
+            }
+            showing_card = !showing_card;
             if (showing_card || !picture) {
                 test_card_draw();
                 hold = 0;
@@ -154,6 +187,7 @@ void app_main(void)
         if (media_take_changed()) {
             // A new picture arrived over Wi-Fi (or a transfer stopped part way).
             showing_card = false;
+            s_index = 0;
             picture = show_stored(&hold);
         } else if (hold && picture && !showing_card) {
             if (media_next_frame(&hold) != ESP_OK) {

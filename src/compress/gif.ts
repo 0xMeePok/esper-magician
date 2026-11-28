@@ -70,7 +70,32 @@ export function* gifFrames(bytes: ArrayBuffer): Generator<{ frame: Frame; delay:
   }
 }
 
-type Pending = { index: Uint8Array; palette: Palette; delay: number; colorDepth: number }
+type Rect = { left: number; top: number; width: number; height: number }
+
+type Pending = {
+  index: Uint8Array
+  palette: Palette
+  delay: number
+  colorDepth: number
+  rect: Rect
+  /** Palette slot for "leave the pixel as it is", or -1 on a frame that covers everything. */
+  transparentIndex: number
+}
+
+/**
+ * Unchanged pixels shorter than this between two changed ones are drawn anyway: the player draws
+ * each run of changed pixels separately, and many tiny runs cost more time than a few repeats.
+ */
+const MIN_GAP = 12
+
+/** Same colour within `tolerance` (summed over red, green and blue). */
+function same(a: Uint8ClampedArray, b: Uint8ClampedArray, at: number, tolerance: number) {
+  return Math.abs(a[at]! - b[at]!) + Math.abs(a[at + 1]! - b[at + 1]!) + Math.abs(a[at + 2]! - b[at + 2]!) <= tolerance
+}
+
+function depthFor(colors: number) {
+  return Math.max(2, Math.ceil(Math.log2(Math.max(colors, 2))))
+}
 
 class StrengthEncoder {
   readonly encoder: Encoder = GIFEncoder()
@@ -79,6 +104,11 @@ class StrengthEncoder {
   width = 0
   height = 0
   readonly strength: Strength
+  /**
+   * For each pixel, the source colour it had when it was last drawn. A later frame only redraws
+   * pixels that moved away from this, so small differences can't pile up frame after frame.
+   */
+  drawn: Uint8ClampedArray | null = null
 
   constructor(strength: Strength) {
     this.strength = strength
@@ -90,19 +120,113 @@ class StrengthEncoder {
       if (this.pending) this.pending.delay += delay
       return
     }
+    if (!this.drawn || frame.width !== this.width || frame.height !== this.height) {
+      this.addWhole(frame, delay)
+      return
+    }
+    const changed = this.changedPixels(frame)
+    if (!changed) {
+      // Nothing visible changed: keep the frame on screen longer instead.
+      if (this.pending) this.pending.delay += delay
+      return
+    }
+    this.addChanges(frame, delay, changed.mask, changed.rect)
+  }
+
+  /** The first frame: every pixel, no transparency. */
+  private addWhole(frame: Frame, delay: number) {
     this.flush()
     const palette = quantize(frame.data, this.strength.gifColors)
-    const index = applyPalette(frame.data, palette)
-    const colorDepth = Math.max(2, Math.ceil(Math.log2(Math.max(palette.length, 2))))
     this.width = frame.width
     this.height = frame.height
-    this.pending = { index, palette, delay, colorDepth }
+    this.drawn = frame.data.slice()
+    this.pending = {
+      index: applyPalette(frame.data, palette),
+      palette,
+      delay,
+      colorDepth: depthFor(palette.length),
+      rect: { left: 0, top: 0, width: frame.width, height: frame.height },
+      transparentIndex: -1,
+    }
+  }
+
+  /** Which pixels to draw (1) or leave (0), and the smallest rectangle around them. */
+  private changedPixels(frame: Frame): { mask: Uint8Array; rect: Rect } | null {
+    const { width, height } = frame
+    const drawn = this.drawn!
+    const tolerance = this.strength.gifTolerance
+    const mask = new Uint8Array(width * height)
+    let left = width
+    let right = -1
+    let top = height
+    let bottom = -1
+    for (let y = 0; y < height; y++) {
+      let lastChanged = -1
+      for (let x = 0; x < width; x++) {
+        const at = y * width + x
+        if (same(frame.data, drawn, at * 4, tolerance)) continue
+        // Fill a short gap back to the previous changed pixel in this row.
+        if (lastChanged >= 0 && x - lastChanged - 1 < MIN_GAP) mask.fill(1, y * width + lastChanged + 1, at)
+        mask[at] = 1
+        lastChanged = x
+        if (x < left) left = x
+        if (x > right) right = x
+        if (y < top) top = y
+        if (y > bottom) bottom = y
+      }
+    }
+    if (right < 0) return null
+    return { mask, rect: { left, top, width: right - left + 1, height: bottom - top + 1 } }
+  }
+
+  /** A later frame: only the rectangle around the changes, with unchanged pixels transparent. */
+  private addChanges(frame: Frame, delay: number, mask: Uint8Array, rect: Rect) {
+    this.flush()
+    const drawn = this.drawn!
+    const region = new Uint8ClampedArray(rect.width * rect.height * 4)
+    const opaque = new Uint8ClampedArray(rect.width * rect.height * 4)
+    let opaqueCount = 0
+    for (let y = 0; y < rect.height; y++) {
+      for (let x = 0; x < rect.width; x++) {
+        const at = (rect.top + y) * frame.width + rect.left + x
+        const from = at * 4
+        const to = (y * rect.width + x) * 4
+        region.set(frame.data.subarray(from, from + 4), to)
+        if (mask[at]) {
+          opaque.set(frame.data.subarray(from, from + 4), opaqueCount * 4)
+          opaqueCount++
+          drawn.set(frame.data.subarray(from, from + 4), from)
+        }
+      }
+    }
+    // One palette slot is kept for "transparent", the pixels this frame leaves alone.
+    const palette = quantize(opaque.subarray(0, opaqueCount * 4), this.strength.gifColors - 1)
+    const index = applyPalette(region, palette)
+    const transparentIndex = palette.length
+    palette.push([0, 0, 0])
+    for (let y = 0; y < rect.height; y++) {
+      for (let x = 0; x < rect.width; x++) {
+        if (!mask[(rect.top + y) * frame.width + rect.left + x]) index[y * rect.width + x] = transparentIndex
+      }
+    }
+    this.pending = { index, palette, delay, colorDepth: depthFor(palette.length), rect, transparentIndex }
   }
 
   flush() {
     if (!this.pending) return
-    const { index, palette, delay, colorDepth } = this.pending
-    this.encoder.writeFrame(index, this.width, this.height, { palette, delay, repeat: 0, colorDepth })
+    const { index, palette, delay, colorDepth, rect, transparentIndex } = this.pending
+    const start = this.encoder.bytesView().length
+    const transparent = transparentIndex >= 0
+    this.encoder.writeFrame(index, rect.width, rect.height, {
+      palette,
+      delay,
+      repeat: 0,
+      colorDepth,
+      transparent,
+      transparentIndex: transparent ? transparentIndex : 0,
+      dispose: 1, // keep this frame on screen; the next one draws over it
+    })
+    if (rect.left || rect.top) placeFrame(this.encoder.bytesView(), start, rect)
     this.written++
     this.pending = null
   }
@@ -118,6 +242,21 @@ class StrengthEncoder {
       frames: this.written,
     }
   }
+}
+
+/**
+ * gifenc always writes a frame at (0, 0). Moves the frame just written to the rectangle's corner
+ * by editing its image descriptor, which follows the 8-byte graphic control extension.
+ */
+function placeFrame(bytes: Uint8Array, start: number, rect: Rect) {
+  const at = start + 8
+  if (bytes[start] !== 0x21 || bytes[start + 1] !== 0xf9 || bytes[at] !== 0x2c) {
+    throw new Error('Unexpected GIF layout from gifenc.')
+  }
+  bytes[at + 1] = rect.left & 0xff
+  bytes[at + 2] = rect.left >> 8
+  bytes[at + 3] = rect.top & 0xff
+  bytes[at + 4] = rect.top >> 8
 }
 
 /**

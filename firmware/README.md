@@ -29,7 +29,8 @@ one over Wi-Fi:
 
 Before anything has been sent, or if what's stored is damaged, the screen shows
 a colour test card. The button (GPIO 33, or 16 on the 30-pin board) switches between the picture and the
-test card.
+test card. If several pictures are stored one after another (see below), the
+button steps through them instead.
 
 You don't need any of this to use the screen: the website builds nothing and
 installs the copy in `public/firmware/esper-1.9/`. This folder is for changing
@@ -136,6 +137,16 @@ as a baseline JPEG or a GIF, then:
 ```bash
 python tools/make_media.py picture.jpg media.bin
 python -m esptool --chip esp32 write_flash 0x1D0000 media.bin
+```
+
+Give it several pictures to store them all; the button then steps through them
+in that order (firmware 1.5.0 and newer; older players show only the first).
+Each header except the last says "NEXT" at byte 0x14, and the next picture
+starts at the following 4 KB boundary. Sending a picture from the website
+replaces the whole set with that one picture.
+
+```bash
+python tools/make_media.py koi.gif rain.gif meadow.gif media.bin
 ```
 
 ## Update the copy the website installs

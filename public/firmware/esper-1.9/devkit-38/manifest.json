@@ -1,6 +1,6 @@
 {
   "name": "ESPER player",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "screen": "1.9",
   "board": "devkit-38",
   "mediaOffset": 1900544,
@@ -30,8 +30,8 @@
         {
           "path": "esper_player.bin",
           "offset": 65536,
-          "size": 869072,
-          "sha256": "9f87f57590d9b682a1455de5feaec99aa70697b29297107ade4295ee42f96928"
+          "size": 869568,
+          "sha256": "988286e25b599fff914d5e52c944177125c809f03164cc07cdbd189ea531888e"
         }
       ]
     }

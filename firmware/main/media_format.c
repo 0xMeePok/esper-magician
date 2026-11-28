@@ -34,6 +34,16 @@ media_header_result_t media_header_parse(const uint8_t *b, size_t len, uint32_t 
     return MEDIA_HEADER_OK;
 }
 
+uint32_t media_next_offset(const uint8_t *b, size_t len, const media_header_t *header,
+                           uint32_t at)
+{
+    if (len < 24 || memcmp(b + 20, "NEXT", 4) != 0) {
+        return 0;
+    }
+    uint32_t end = at + MEDIA_HEADER_BYTES + header->length;
+    return (end + MEDIA_HEADER_BYTES - 1) / MEDIA_HEADER_BYTES * MEDIA_HEADER_BYTES;
+}
+
 uint32_t media_crc32(uint32_t crc, const uint8_t *data, size_t len)
 {
     static uint32_t table[256];
